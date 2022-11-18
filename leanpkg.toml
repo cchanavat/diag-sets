@@ -1,0 +1,8 @@
+[package]
+name = "diag-sets"
+version = "0.1"
+lean_version = "leanprover-community/lean:3.49.0"
+path = "src"
+
+[dependencies]
+mathlib = {git = "https://github.com/leanprover-community/mathlib", rev = "5e4b2d4a3d6bdd754a97b0764ca9d5352913d1f1"}
