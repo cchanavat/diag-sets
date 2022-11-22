@@ -2,6 +2,10 @@ import data.finset.basic
 import order.cover
 import order.category.FinPartialOrder
 
+
+noncomputable theory
+local attribute [instance] classical.prop_decidable
+
 /--
   This file provide some useful lemmas about the finiteness property of P
   In particular
@@ -11,19 +15,7 @@ import order.category.FinPartialOrder
   the form ∀ x ∈ U, ∃ y ∈ U, x < (or >) y, with `U : finset P` 
 -/
 
-variables (P : FinPartialOrder) [decidable_eq P] [@decidable_rel P (<)]
-
-
-instance decidable_lt_inv : @decidable_rel P (>) := by apply_instance
-instance decidable_eq_dual : decidable_eq Pᵒᵈ := by apply_instance
-instance decidable_rel_dual : @decidable_rel (Pᵒᵈ) (<) := by apply_instance
-instance decidable_le : @decidable_rel P (≤) := 
-begin
-  intros x y,
-  rw le_iff_eq_or_lt,
-  apply or.decidable,
-end
-
+variables (P : FinPartialOrder) -- [decidable_eq P] [@decidable_rel P (<)]
 
 
 -- Some useful lemma about finiteness
@@ -122,8 +114,7 @@ lemma no_infinite_decreasing_seq (h : ∀ x ∈ U, { y : P // y ∈ U ∧ x < y 
   ¬ (∀ n, s (n + 1) < s n) :=
 begin
   intro h,
-  haveI := decidable_rel_dual P,
-  apply @no_infinite_increasing_seq (FinPartialOrder.dual.obj P) _ _ s h,
+  apply @no_infinite_increasing_seq (FinPartialOrder.dual.obj P) s h,
 end
 
 -- Therefore, there cannot be true statement of the form (∀ x : U, { y : U // x < y })
@@ -132,10 +123,8 @@ lemma no_forall_exists_lt (h : ∀ x ∈ U, { y : P // y ∈ U ∧ x < y }) : fa
 no_infinite_increasing_seq (seq_A_E hx0 h) (seq_A_E_increasing _ _)
 
 lemma no_forall_exists_gt (hx0 : x0 ∈ U) (h : ∀ x ∈ U, { y : P // y ∈ U ∧ y < x }) : false :=
-begin
-  haveI := decidable_rel_dual P,
-  apply @no_infinite_increasing_seq (FinPartialOrder.dual.obj P) _ _ _ (seq_A_E_increasing hx0 h)
-end
+@no_infinite_increasing_seq (FinPartialOrder.dual.obj P) _ (seq_A_E_increasing hx0 h)
+
 
 -- with the axiom of choice
 lemma no_forall_exists_lt' (h : ∀ x ∈ U, ∃ y ∈ U, x < y) : false :=
@@ -234,7 +223,6 @@ begin
   apply no_forall_exists_gt' hIoc h'
 end
 
--- If x < x', there is a covering element between x and x'
 lemma exists_cov_of_greater {x x' : P} (hx' : x' ∈ greater x) : ∃ y, x ⋖ y ∧ y ≤ x' := 
 begin
   cases exists_min_greater hx',
@@ -250,6 +238,21 @@ begin
     apply lt_irrefl w,
     exact hw },
   { exact Ioc_le_right w_in }
+end
+
+def smaller (x : P) : finset P := finset.filter (λ y : P, x > y) points
+
+lemma smaller_iff_in_smaller (x y : P) : y ∈ smaller x ↔ y < x := 
+begin
+  erw finset.mem_filter, simp [fintype.complete]
+end  
+
+lemma exists_cov_of_smaller {x x' : P} (hx' : x ∈ smaller x') : ∃ y, x ≤ y ∧ y ⋖ x' := 
+begin
+  cases @exists_cov_of_greater (FinPartialOrder.dual.obj P) x' x hx' with y hy, 
+  use y,
+  rw ←to_dual_covby_to_dual_iff, 
+  apply and.intro hy.right hy.left,
 end
 
 end finite

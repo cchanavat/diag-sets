@@ -1,30 +1,27 @@
-import order.cover
-import order.category.FinPartialOrder
 import order.interval
 import order.locally_finite
-import combinatorics.quiver.basic
-import combinatorics.quiver.path
 import data.set.basic
 import data.nat.interval
 
+
 import finite
+import hasse
 
+local attribute [instance] classical.prop_decidable
 
+open quiver hasse set
+
+/- 1.1. Some basic definitions of order theory -/
 
 -- 1.1.1 (Covering relation) ⋖ is already implemented in Lean, with tons of useful lemmas
 
 -- We require that our ogpos has a decidable equality and <
-variables (P : FinPartialOrder) [decidable_eq P] [@decidable_rel P (<)]
 
+universe u
 
 namespace ogpos
 
-instance cover_decidable (x y : P) : decidable (x ⋖ y) := and.decidable
-
--- 1.1.2 (Hasse diagram)
-instance hasse : quiver P := { hom := λ y x, x ⋖ y }
-
-variables {P} 
+variables {P : FinPartialOrder}
 
 abbreviation points : finset P := fintype.elems P
 abbreviation points_set : set P := fintype.elems P
@@ -37,43 +34,6 @@ end
 
 instance (U : set P) : finite U :=
 finite.of_injective (set.inclusion (incl_of_set U)) (set.inclusion_injective _)
-
-noncomputable
-instance (U : set P) : fintype U := fintype.of_finite U
-
-noncomputable
-instance (U : set P) (x : P) : decidable (x ∈ U) := set.decidable_mem_of_fintype _ _
-
--- noncomputable
--- instance (U : set P) : decidable (U = ∅) := begin
--- apply_instance
--- end
-
-def hom_of_cov {x y : P} (hcov : y ⋖ x) : x ⟶ y := hcov
-def path_of_cov {x y : P} (hcov : y ⋖ x) : quiver.path x y := quiver.hom.to_path (hom_of_cov hcov)
-def cov_of_hom {x y : P} (f : x ⟶ y) : y ⋖ x := f
-
-lemma le_of_path {x y : P} (p : quiver.path y x) : x ≤ y :=
-begin
-  induction p with w z p h h1,
-  { refl },
-  { apply le_of_lt, 
-    apply has_lt.lt.trans_le (covby.lt (cov_of_hom h)) h1  }
-end
-
-lemma lt_of_path {x y : P} (hneq : x ≠ y) (p : quiver.path y x) : x < y :=
-begin 
-  rw lt_iff_le_and_ne,
-  exact and.intro (le_of_path p) hneq
-end
-
-lemma exists_cov_of_lt {x x' : P} (hle : x < x') : ∃ y, x ⋖ y ∧ y ≤ x' :=
-begin
-  rw ←finite.greater_iff_in_greater at hle,
-  exact finite.exists_cov_of_greater hle 
-end
-
-open set
 
 -- 1.1.3 (Closure of a subset)
 def cl (U : set P) : set P := { x | ∃ y ∈ U, x ≤ y }
@@ -165,7 +125,6 @@ begin
     exact ⟨i, hin⟩ }
 end 
 
-
 variable (U : set P)
 
 -- 1.1.7 (Maximal element)
@@ -177,14 +136,6 @@ begin
   intros x hx,
   exact hx.left
 end
-
--- Sometimes during the proof, we will need some hypothesis on U
--- That hopefully will no cause any trouble in practice
-instance decidable_subset [fintype U] (x : P) : decidable (x ∈ U) := 
-set.decidable_mem_of_fintype _ _
-
-instance decidable_maximal [fintype U] (x : P) : decidable (maximal U x) := and.decidable
-
 
 -- In this namespace, some auxialiary lemmas to prove Lemma 1.1.8
 namespace maximal
@@ -265,12 +216,36 @@ subset_antisymm (maximal.U_sub_cl_MaxU U) (maximal.MaxU_sub_cl_U U)
 
 
 -- we define the sets of normal elements, the one that are at the bottom of the Hasse diagram
-def is_normal (x : P) : Prop := ∀ y : P, is_empty (y ⟶ x)  
+def is_normal (x : P) : Prop := ∀ y : P, is_empty (x ⟶ y)  
 
-lemma is_normal_not_covered (x : P) (norm : is_normal x) : ∀ y : P, ¬ x ⋖ y :=
+lemma not_covering_of_normal {x : P} (norm : is_normal x) : ∀ y : P, ¬ y ⋖ x :=
 λ y h, (norm y).false h
 
-open quiver
+-- It is equivalent to say that there is no element below x
+lemma normal_iff_no_lt (x : P) : is_normal x ↔ ∀ y : P, ¬ y < x :=
+begin
+  split; intros h y,
+  { intro hlt, 
+    cases exists_left_cov_of_lt hlt with w hw,
+    exact not_covering_of_normal h _ (hom_of_cov hw.right) },
+  { apply is_empty.mk,
+    intro f, 
+    exact h y (covby.lt (cov_of_hom f)) }
+end
+
+lemma all_paths_length_0_of_normal {x : P} (norm : is_normal x) (y : P) (p : path x y) : 
+  p.length = 0 :=
+begin
+  cases p with w hp q p,
+  { refl },
+  { exfalso,
+    by_cases h : w = x,
+    {rw h at p, exact (norm _).false p }, 
+    { cases exists_left_cov_of_lt (has_lt.lt.trans_le (covby.lt p) (le_of_path q)) with z hz,
+      rw normal_iff_no_lt at norm,
+      apply norm z,
+      exact (covby.lt hz.right) } }
+end
 
 -- A path is maximal iff its codomain is normal
 def is_maximal {x y : P} (p : path x y) : Prop := is_normal y
@@ -294,8 +269,8 @@ def maximal_path_concat {x y : P} (p : path y x) (q : maximal_path x) : maximal_
   path := path.comp p q.path }
 
 -- An element is graded if all maximal path have same length
--- To avoid proving there exists a maximal path, we provide one in the class strucutre
--- In pratice, it should pose no problem, as when we prove all path have the same lenght,
+-- To avoid proving there exists a maximal path, we provide one in the strucutre
+-- In pratice, it should not be a problem, as when we prove that all paths have the same length,
 -- We will most likely exhibit one 
 structure is_graded (x : P) := 
 (dim : ℕ)
@@ -319,83 +294,22 @@ begin
   exact graded.all_graded x
 end
 
-def max_path (x : P) :=  @is_graded.max_path _ _ _ _ (graded.all_graded x)
+def max_path (x : P) :=  @is_graded.max_path _ _ (graded.all_graded x)
 -- 1.1.10 (Dimension of an element)
 def dim (x : P) : nat := (max_path x).path.length
 
-
--- Auxiliary results to prove that if x < y, then we have a path from y to x
-namespace path_of_lt
-variables {x y : P} 
-
-noncomputable
-def next (xn : P) (hpath : ∀ z : P, path z x → ¬z = y) (hlt : xn < y) (p : path xn x) : 
-  { x // xn ⋖ x ∧ x < y } :=
+-- The only elements of dim 0 are the normal one 
+lemma dim_0_iff_normal (x : P) : dim x = 0 ↔ is_normal x :=
 begin
-  let k := classical.indefinite_description _ (exists_cov_of_lt hlt),
-  use k.val,
-  apply and.intro k.prop.left,
-  by_cases heq : k.val = y,
-  { exfalso,
-    have hcov : xn ⋖ y := 
-    begin
-      rw ←heq, exact k.prop.left
-    end,
-    apply hpath _ (path.comp (path_of_cov hcov) p), 
-    refl },
-    { rw lt_iff_le_and_ne,
-      exact and.intro k.prop.right heq }
-end
-
--- A cool use of Σ-types
-noncomputable
-def path_seq (hpath : ∀ z : P, path z x → ¬z = y) (hlt : x < y) : 
-  ℕ → Σ (w : P), { p : path w x // w < y }  
-| 0       := ⟨x, ⟨path.nil, hlt⟩⟩
-| (n + 1) := let v := (next (path_seq n).1 hpath (path_seq n).2.prop (path_seq n).2.val) in
-             ⟨v.val, ⟨path.comp (path_of_cov v.prop.left) (path_seq n).2.val, v.prop.right⟩⟩
-
--- Now we forget some of the structure of the previous sequence 
-noncomputable
-def path_seq_forget (hpath : ∀ z : P, path z x → ¬z = y) (hlt : x < y) : 
-  ℕ → P := λ n, (path_seq hpath hlt n).1
-
--- Tis sequence is increasing
-lemma path_seq_forget_cov_increasing (hpath : ∀ z : P, path z x → ¬z = y) (hlt : x < y) :
-  ∀ n, path_seq_forget hpath hlt n ⋖ path_seq_forget hpath hlt (n + 1) :=
-begin
-  intro n,
-  unfold path_seq_forget path_seq, simp,
-  exact (next _ hpath (path_seq hpath hlt n).2.prop (path_seq hpath hlt n).2.val).prop.left
-end
-
-lemma path_seq_forget_increasing (hpath : ∀ z : P, path z x → ¬z = y) (hlt : x < y) :
-  ∀ n, path_seq_forget hpath hlt n < path_seq_forget hpath hlt (n + 1) :=
-begin
-  intro n,
-  apply covby.lt,
-  apply path_seq_forget_cov_increasing
-end
-
-def path_of_lt {x y : P} (hlt : x < y) : ∃ (z : P) (p : path z x), z = y :=
-begin
-  by_contra' h,
-  apply finite.no_infinite_increasing_seq (path_of_lt.path_seq_forget h hlt),
-  apply path_of_lt.path_seq_forget_increasing
-end
-
-end path_of_lt
-
--- This is the result,
--- Highly nonconstructible
-noncomputable
-def path_of_lt {x y : P} (hlt : x < y) : path y x :=
-begin
-  have p := classical.indefinite_description _ (path_of_lt.path_of_lt hlt),
-  simp at p,
-  have q := classical.indefinite_description _ p.prop,
-  rw ←q.prop,
-  exact q.val
+  unfold dim,
+  split; intro h,
+  { intros y, refine ⟨_⟩, intro e,
+    have n := maximal_path.normal_cod (max_path x), 
+    rw ←path.eq_of_length_zero _ h at n,
+    exact (n y).false e },
+  { by_contra' hm,
+    apply hm,
+    apply all_paths_length_0_of_normal h }
 end
 
 --Lemma 1.1.12
@@ -431,7 +345,7 @@ end
 variable [is_closed U]
 
 
--- Various auxiliary results about dimension
+-- Various auxiliary results about dimension of a subset
 namespace dim
 
 -- This won't be the final dim_set
@@ -666,4 +580,89 @@ end
 def pure (U : set P) [is_closed U] := 
   ∀ x ∈ Max U, dim x = Dim' U (set.nonempty_of_mem (Max_subset U H))
 
+
+/- 1.2. Orientation and boundaries -/
+
+variable (P)
+
+-- We use bool in place of + / - so that all operations (eg ¬) are already implemented 
+-- Convention : tt <-> + and ff <-> -
+
+def orientation (P : FinPartialOrder) : Type* := Π {x y : P} (e : x ⟶ y), bool 
+
 end ogpos
+
+open ogpos
+
+structure ogpos :=
+(P : FinPartialOrder)
+[P_graded : graded P]
+(ε : orientation P)
+
+instance : has_coe_to_sort ogpos Type* := ⟨λ X, X.P⟩
+
+@[simp] lemma coe_to_FinPartialOrder (P : ogpos) : ↥P.P = ↥P := rfl
+
+instance (P : ogpos) : graded P.P := P.P_graded
+
+-- Remark 1.2.4. TODO
+
+
+-- -- We can view any subset as a FinPartialOrder
+-- instance subset_to_FinPartial_order : has_coe (set ↥P) FinPartialOrder.{u} :=
+-- { coe := λ U, 
+--   { to_PartialOrder := PartialOrder.of U, 
+--     is_fintype := begin simp, apply fintype.of_finite U, end
+--   } }
+
+-- def ι (U : set P) : U → (P : FinPartialOrder.{u}) := λ x, x
+
+-- instance embedding (U : set P) : has_coe U (P : FinPartialOrder.{u}) := {coe := ι P U}
+
+-- def orientation_restriction (P : FinPartialOrder.{u}) (ε : orientation.{u} P) (U : set P) : 
+--   orientation.{u} U := λ x y f, @ε (ι P U x) _ f
+
+-- instance ogpos_closed (Q : ogpos.{u}) (U : set Q) [is_closed U] : ogpos.{u} :=
+-- { P := U,
+--   ε := λ x y f, @ogpos.ε Q x y f }
+
+-- 1.2.5 (Faces and cofaces)
+
+namespace faces
+
+variable {P : ogpos}
+
+--1.2.5 (Faces and cofaces)
+-- Would it have been better to do:
+-- Σ y, { e : x ⟶ y // P.ε e = α } 
+-- (but it's the same has we are working classicaly)
+
+def Δ (α : bool) (x : P) := { y | ∃ e : y ⋖ x, P.ε e = α }
+
+def coΔ (α : bool) (x : P) := { y | ∃ e : x ⋖ y, P.ε e = α }
+
+lemma cov_of_Δ {α : bool} {x y : P} (hy : y ∈ Δ α x) : y ⋖ x :=
+exists.elim hy (λ h _, h)
+
+lemma cov_of_coΔ {α : bool} {x y : P} (hy : y ∈ coΔ α x) : x ⋖ y :=
+exists.elim hy (λ h _, h)
+
+-- 1.2.6 (Input and output boundaries)
+-- We allow n < 0 in the general case, and set it to ∅ in that case, for convenience
+def sΔ' (α : bool) (n : nat) (U : set P) [is_closed U] : set P := 
+{x ∈ grading U n | coΔ (to_bool (¬↥α)) x ∩ U = ∅}
+
+def sΔ (α : bool) (n : int) (U : set P) [is_closed U] : set P := 
+dite (0 ≤ n) (λ (h : 0 ≤ n), sΔ' α n.to_nat U) (λ _, ∅)
+
+def δ' (α : bool) (n : nat) (U : set P) [is_closed U] : set P := 
+cl (sΔ α n U) ∪ ⋃ (k : finset.Ico 0 n), cl (grading (Max U) k)
+
+def δ (α : bool) (n : int) (U : set P) [is_closed U] : set P :=
+dite (0 ≤ n) (λ (h : 0 ≤ n), δ' α n.to_nat U) (λ _, ∅)
+  
+lemma Δ_eq_sΔ_cl_singleton (α : bool) (x : P) : Δ α x = sΔ α (dim x - 1) (cl {x}) :=
+begin
+  sorry
+end
+end faces
