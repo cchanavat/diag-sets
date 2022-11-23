@@ -327,7 +327,7 @@ begin
 end
 
 --Lemma 1.1.12
-lemma dim_monotonic (x y : P) (hle : x ≤ y) : dim x ≤ dim y :=
+lemma dim_monotonic {x y : P} (hle : x ≤ y) : dim x ≤ dim y :=
 begin
   cases lt_or_eq_of_le hle,
   { have p := path_of_lt h, 
@@ -389,7 +389,7 @@ end
 
 -- end
 
-variable [is_closed U]
+-- variable [is_closed U]
 
 
 -- Various auxiliary results about dimension of a subset
@@ -487,7 +487,7 @@ begin
 end
 
 -- As long as we can provide a point in P, the dimension of every point is bounded
-lemma bounded_dim_set' (x : P) (U : set P) [is_closed U] : ∃ N, ∀ n ∈ dim_set U, n ≤ N :=
+lemma bounded_dim_set' (x : P) (U : set P) : ∃ N, ∀ n ∈ dim_set U, n ≤ N :=
 begin
   by_contra' h,
   apply finite.no_forall_neq_preds (dim_seq x h),
@@ -495,7 +495,7 @@ begin
 end
 
 -- And if P is empty, we can as well show it is bounded (trivially)
-lemma bounded_dim_set (U : set P) [is_closed U] : ∃ N, ∀ n ∈ dim_set U, n ≤ N :=
+lemma bounded_dim_set (U : set P) : ∃ N, ∀ n ∈ dim_set U, n ≤ N :=
 begin
   by_cases h : is_empty P,
   { use 0, intros n hn, exfalso, 
@@ -506,7 +506,7 @@ end
 
 -- Do I really need to do this?
 noncomputable
-def dim_set_injective (U : set P) [is_closed U] : 
+def dim_set_injective (U : set P) : 
   Σ (N : ℕ), { f : dim_set U → fin N // function.injective f } :=
 begin
   have N := classical.indefinite_description _ (bounded_dim_set U),
@@ -519,10 +519,10 @@ end
 
 -- A number such that Dim U is less than it
 noncomputable
-def upper_bound (U : set P) [is_closed U] : { N // ∀ n ∈ dim_set U, n ≤ N } := 
+def upper_bound (U : set P) : { N // ∀ n ∈ dim_set U, n ≤ N } := 
 classical.indefinite_description _ (bounded_dim_set U)  
 
-lemma dim_mem_dim_set (U : set P) [is_closed U] : ∀ x ∈ U, dim' x ∈ dim_set U :=
+lemma dim_mem_dim_set (U : set P) : ∀ x ∈ U, dim' x ∈ dim_set U :=
 begin
   intros x hx,
   use x,
@@ -533,10 +533,10 @@ end
 
 -- The upper bound
 noncomputable
-def M (U : set P) [is_closed U] : ℤ := (dim.upper_bound U).val
+def M (U : set P) : ℤ := (dim.upper_bound U).val
 
 -- The fact that it's an upper bound, with the correct def of dim 
-lemma M_prop {U : set P} [is_closed U] : ∀ x ∈ U, dim x ≤ (M U : ℤ) :=
+lemma M_prop {U : set P} : ∀ x ∈ U, dim x ≤ (M U : ℤ) :=
 begin
   intros x hx,
   have k := (upper_bound U).prop (dim' x) (dim_mem_dim_set U x hx),
@@ -575,11 +575,11 @@ end
 
 -- 1.1.14 (Dimension of a subset)
 noncomputable
-def Dim [is_closed U] : with_bot ℤ := finset.max (dim_set U)
+def Dim : with_bot ℤ := finset.max (dim_set U)
 
 lemma Dim_empty : Dim (∅ : set P) = ⊥ := by { unfold Dim, simp }
 
-lemma dim_set_nonempty_of_U_nonempty {U : set P} [is_closed U] (hnempty : U.nonempty) : 
+lemma dim_set_nonempty_of_U_nonempty {U : set P} (hnempty : U.nonempty) : 
   (dim_set U).nonempty :=
 begin
   cases hnempty with w hw,
@@ -589,10 +589,10 @@ end
 
 -- To work directly in ℕ with non empty sets
 noncomputable
-def Dim' [is_closed U] (hnempty : U.nonempty) : ℤ := 
+def Dim' (hnempty : U.nonempty) : ℤ := 
 finset.max' (dim_set U) (dim_set_nonempty_of_U_nonempty hnempty)
 
-lemma Dim_eq_Dim' [is_closed U] (hnempty : U.nonempty) : some (Dim' U hnempty) = Dim U :=
+lemma Dim_eq_Dim' (hnempty : U.nonempty) : some (Dim' U hnempty) = Dim U :=
 finset.coe_max' _
 
 -- 1.1.15
@@ -617,12 +617,51 @@ end
 lemma Dim_cl_singleton (x : P) : Dim (cl ({x} : set P)) = some (dim x) :=
 by { rw [←Dim_eq_Dim', Dim'_cl_singleton] }
 
+lemma dim_le_Dim' (U : set P) (hnempty : U.nonempty ): ∀ x ∈ U, dim x ≤ Dim' U hnempty :=
+begin
+  intros x hx, 
+  exact finset.le_max' _ _ (dim_set_complete U x hx)
+end
+
+lemma dim_le_Dim (U : set P) : ∀ x ∈ U, (dim x : with_bot ℤ) ≤ Dim U :=
+begin
+by_cases h : U = ∅,
+  { rw [h, Dim_empty], intros x hx,
+    exfalso, apply not_mem_empty x hx },
+  { intros x hx, 
+    rw [←ne.def, ne_empty_iff_nonempty] at h,
+    rw ←Dim_eq_Dim' U h,
+    erw with_bot.coe_le_coe,
+    apply dim_le_Dim' U h x hx }
+end
+
+lemma Dim_le_iff_forall_dim_le (U : set P) (n : ℤ) : Dim U ≤ n ↔ ∀ x ∈ U, dim x ≤ n :=
+begin
+  by_cases h : U = ∅,
+  { rw [h, Dim_empty], split; intro h1,
+    { intros x hx, exfalso, apply not_mem_empty x hx },
+    { apply le_of_lt (with_bot.bot_lt_coe n) } },
+  { rw [←ne.def, ne_empty_iff_nonempty] at h,
+    split; intro h1,
+    { intros x hx, 
+      apply le_trans (dim_le_Dim' U h x hx),
+      erw [←Dim_eq_Dim' U h, with_bot.coe_le_coe] at h1,
+      exact h1 },
+    { erw [←Dim_eq_Dim' U h, with_bot.coe_le_coe],
+      apply finset.max'_le,
+      intros m hdim,
+      erw finset.mem_filter at hdim,
+      cases hdim.right with w hw, cases hw with hw hw',
+      rw hw',
+      exact h1 w hw } }
+end
+
 -- 1.1.16 (Codimension of an element)
 noncomputable
-def coDim {U : set P} [is_closed U] {x : P} (hx : x ∈ U) : ℤ := 
+def coDim {U : set P} {x : P} (hx : x ∈ U) : ℤ := 
   Dim' U (set.nonempty_of_mem hx) - dim x
 
-def coDim_positive {U : set P} [is_closed U] {x : P} (hx : x ∈ U) : 0 ≤ coDim hx :=
+def coDim_positive {U : set P} {x : P} (hx : x ∈ U) : 0 ≤ coDim hx :=
 begin
   unfold coDim,
   rw [sub_nonneg],
@@ -630,9 +669,8 @@ begin
 end
 
 -- 1.1.17 (Pure subset).
-def pure (U : set P) [is_closed U] := 
+def pure (U : set P) := 
   ∀ x ∈ Max U, dim x = Dim' U (set.nonempty_of_mem (Max_subset U H))
-
 
 /- 1.2. Orientation and boundaries -/
 
@@ -708,17 +746,35 @@ exists.elim hy (λ h _, h)
 
 -- 1.2.6 (Input and output boundaries)
 -- We allow n < 0 in the general case, and set it to ∅ in that case, for convenience
-def sΔ' (α : bool) (n : ℤ) (U : set P) [is_closed U] : set P := 
+def sΔ' (α : bool) (n : ℤ) (U : set P) : set P := 
 {x ∈ grading U n | coΔ (!α) x ∩ U = ∅}
 
-def sΔ (α : bool) (n : ℤ) (U : set P) [is_closed U] : set P := 
+def sΔ (α : bool) (n : ℤ) (U : set P) : set P := 
 dite (0 ≤ n) (λ (h : 0 ≤ n), sΔ' α n U) (λ _, ∅)
 
-def δ' (α : bool) (n : ℤ) (U : set P) [is_closed U] : set P := 
-cl (sΔ α n U) ∪ ⋃ (k : finset.Ico 0 n), cl (grading (Max U) k)
+lemma sΔ_eq_sΔ' {α : bool} {n : ℤ} {U : set P} (hn : 0 ≤ n) : sΔ α n U = sΔ' α n U :=
+begin
+  unfold sΔ,
+  rw dif_pos hn,
+end
 
-def δ (α : bool) (n : int) (U : set P) [is_closed U] : set P :=
+lemma mem_sΔ_iff_mem_sΔ' {α : bool} {n : ℤ} {U : set P} (hn : 0 ≤ n) (x : P) :
+  x ∈ sΔ α n U ↔ x ∈ sΔ' α n U := by rw sΔ_eq_sΔ' hn
+
+def δ' (α : bool) (n : ℤ) (U : set P) : set P := 
+cl (sΔ α n U) ∪ ⋃ (k : { k // k < n}), cl (grading (Max U) k)
+
+def δ (α : bool) (n : ℤ) (U : set P) : set P :=
 dite (0 ≤ n) (λ (h : 0 ≤ n), δ' α n U) (λ _, ∅)
+
+lemma δ_eq_δ' {α : bool} {n : ℤ} {U : set P} (hn : 0 ≤ n) : δ α n U = δ' α n U :=
+begin
+  unfold δ,
+  rw dif_pos hn,
+end
+
+lemma mem_δ_iff_mem_δ' {α : bool} {n : ℤ} {U : set P} (hn : 0 ≤ n) (x : P) : 
+  x ∈ δ α n U ↔ x ∈ δ' α n U := by rw δ_eq_δ' hn
 
 -- Remark 1.2.8.
 lemma Δ_eq_sΔ_cl_singleton (α : bool) (x : P) : Δ α x = sΔ α (dim x - 1) (cl {x}) :=
@@ -759,6 +815,32 @@ begin
       cases hx with e hx,
       apply not_covby_of_normal h1 w e },
     { exfalso, apply h1, rw not_le at h, have : ↑0 ≤ dim x := dim_pos x, linarith } }
+end
+
+variables (U : set P)
+
+--Lemma 1.2.9
+lemma dim_δ_n_le_n (α : bool) (n : ℕ) : Dim (δ α n U) ≤ n :=
+begin
+  erw Dim_le_iff_forall_dim_le (δ α n U) (int.of_nat n),
+  rw ←int.coe_nat_eq,
+  intros x hx,
+  rw δ_eq_δ' (nat.cast_nonneg n) at hx,
+  cases hx,
+  { cases hx with y hy,
+    cases hy with hy hle,
+    rw sΔ_eq_sΔ' (nat.cast_nonneg n) at hy,
+    have k := hy.left.right,
+    rw ←hy.left.right,
+    exact dim_monotonic hle },
+  { cases hx with V hV, cases hV with hV hVin,
+    cases hV with k hk, simp only at hk,
+    rw ←hk at hVin,
+    cases hVin with y hy,
+    cases hy with hy hle,
+    apply le_trans (dim_monotonic hle),
+    rw hy.right,
+    apply le_of_lt k.prop }
 end
 
 end faces
