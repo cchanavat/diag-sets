@@ -720,6 +720,7 @@ cl (sΔ α n U) ∪ ⋃ (k : finset.Ico 0 n), cl (grading (Max U) k)
 def δ (α : bool) (n : int) (U : set P) [is_closed U] : set P :=
 dite (0 ≤ n) (λ (h : 0 ≤ n), δ' α n U) (λ _, ∅)
 
+-- Remark 1.2.8.
 lemma Δ_eq_sΔ_cl_singleton (α : bool) (x : P) : Δ α x = sΔ α (dim x - 1) (cl {x}) :=
 begin
   by_cases (1 ≤ dim x); unfold sΔ; simp [h],
