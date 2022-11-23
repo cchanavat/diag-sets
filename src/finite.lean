@@ -1,7 +1,7 @@
 import data.finset.basic
 import order.cover
 import order.category.FinPartialOrder
-
+import tactic.linarith
 
 noncomputable theory
 local attribute [instance] classical.prop_decidable
@@ -253,6 +253,12 @@ begin
   use y,
   rw ←to_dual_covby_to_dual_iff, 
   apply and.intro hy.right hy.left,
+end
+
+-- useful as we will deal with dim x - 1
+lemma eq_pred_eq_succ (n m : ℤ) : m = n - 1 ↔ m + 1 = n :=
+begin
+  split; intro h; linarith,
 end
 
 end finite

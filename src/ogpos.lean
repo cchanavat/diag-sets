@@ -1,8 +1,10 @@
 import order.interval
 import order.locally_finite
+import order.succ_pred.basic
 import data.set.basic
 import data.nat.interval
-
+import data.int.interval
+import init.data.bool.lemmas
 
 import finite
 import hasse
@@ -218,7 +220,7 @@ subset_antisymm (maximal.U_sub_cl_MaxU U) (maximal.MaxU_sub_cl_U U)
 -- we define the sets of normal elements, the one that are at the bottom of the Hasse diagram
 def is_normal (x : P) : Prop := ∀ y : P, is_empty (x ⟶ y)  
 
-lemma not_covering_of_normal {x : P} (norm : is_normal x) : ∀ y : P, ¬ y ⋖ x :=
+lemma not_covby_of_normal {x : P} (norm : is_normal x) : ∀ y : P, ¬ y ⋖ x :=
 λ y h, (norm y).false h
 
 -- It is equivalent to say that there is no element below x
@@ -227,7 +229,7 @@ begin
   split; intros h y,
   { intro hlt, 
     cases exists_left_cov_of_lt hlt with w hw,
-    exact not_covering_of_normal h _ (hom_of_cov hw.right) },
+    exact not_covby_of_normal h _ (hom_of_cov hw.right) },
   { apply is_empty.mk,
     intro f, 
     exact h y (covby.lt (cov_of_hom f)) }
@@ -268,6 +270,9 @@ def maximal_path_concat {x y : P} (p : path y x) (q : maximal_path x) : maximal_
   normal_cod := q.normal_cod,
   path := path.comp p q.path }
 
+def maximal_path_concat.path {x y : P} (p : path y x) (q : maximal_path x) : 
+  (maximal_path_concat p q).path = path.comp p q.path := rfl
+
 -- An element is graded if all maximal path have same length
 -- To avoid proving there exists a maximal path, we provide one in the strucutre
 -- In pratice, it should not be a problem, as when we prove that all paths have the same length,
@@ -295,20 +300,29 @@ begin
 end
 
 def max_path (x : P) :=  @is_graded.max_path _ _ (graded.all_graded x)
+
 -- 1.1.10 (Dimension of an element)
-def dim (x : P) : nat := (max_path x).path.length
+def dim (x : P) : ℤ := (max_path x).path.length
+lemma dim_pos (x : P) : 0 ≤ dim x := nat.cast_nonneg _
+
+def length_dim {x : P} (p : maximal_path x) : dim x = p.path.length :=
+begin
+  erw int.coe_nat_inj',
+  apply same_length
+end
 
 -- The only elements of dim 0 are the normal one 
-lemma dim_0_iff_normal (x : P) : dim x = 0 ↔ is_normal x :=
+lemma dim_zero_iff_normal (x : P) : dim x = ↑0 ↔ is_normal x :=
 begin
   unfold dim,
   split; intro h,
   { intros y, refine ⟨_⟩, intro e,
     have n := maximal_path.normal_cod (max_path x), 
-    rw ←path.eq_of_length_zero _ h at n,
-    exact (n y).false e },
+    rw ←eq_of_length_zero_int _ h at n, 
+    convert (n y).false e },
   { by_contra' hm,
     apply hm,
+    rw int.coe_nat_inj',
     apply all_paths_length_0_of_normal h }
 end
 
@@ -324,10 +338,36 @@ begin
   { rw h }
 end
 
+lemma dim_plus_one_of_covby {x y : P} (hcov : x ⋖ y) : dim x + ↑1 = dim y :=
+begin
+  unfold dim,
+  have hh : (maximal_path_concat (hom.to_path (hom_of_cov hcov)) (max_path x)).path.length = (max_path y).path.length := 
+    same_length y _ _,
+  erw ←hh,
+  rw maximal_path_concat.path,
+  unfold hom.to_path,
+  rw [path.length_comp, path.length_cons, path.length_nil, zero_add, add_comm, int.coe_nat_add], 
+end
+
+lemma covby_of_dim_plus_one_of_le {x y : P} (hle : y ≤ x) (hdim : dim y + 1 = dim x) : y ⋖ x :=
+begin
+  have hlt : y < x := 
+  begin
+     rw lt_iff_le_and_ne,
+     apply and.intro hle, intro h,
+     rw h at hdim,
+     linarith,
+  end,
+  apply covby_of_length_one (path_of_lt hlt),
+  rw [length_dim (maximal_path_concat (path_of_lt hlt) (max_path y)), 
+      length_dim (max_path y), maximal_path_concat.path, path.length_comp, int.coe_nat_add] at hdim,
+  linarith
+end
+
 variables (U) 
 
 -- 1.1.13 (Grading of a subset)
-def grading (n : ℕ) : set P := { x ∈ U | dim x = n }
+def grading (n : ℤ) : set P := { x ∈ U | dim x = n }
 
 @[simp] lemma mem_grading_dim (x : P) (hx : x ∈ U) : x ∈ grading U (dim x) :=
 begin
@@ -342,15 +382,26 @@ begin
     exact h.left }
 end
 
+-- lemma mem_grading_pred_dim_iff_cov {x y : P} : y ∈ grading (cl ({x} : set P)) (dim x - 1) ↔ x ⋖ y := 
+-- begin
+--   erw mem_sep_iff,
+--   split; intro h, sorry, sorry,
+
+-- end
+
 variable [is_closed U]
 
 
 -- Various auxiliary results about dimension of a subset
 namespace dim
 
+def dim' (x : P) : ℕ := (dim x).to_nat
+
+lemma dim_eq_dim' (x : P) : dim x = dim' x := rfl
+
 -- This won't be the final dim_set
 -- We only use it to prove it's bounded
-def dim_set : set ℕ := { n | ∃ x ∈ U, n = dim x }
+def dim_set : set ℕ := { n | ∃ x ∈ U, n = dim' x }
 
 @[simp] lemma dim_set_of_is_empty (hempty : U = ∅) : dim_set U = ∅ :=
 begin
@@ -368,7 +419,7 @@ begin
 end
 
 noncomputable
-def pick {n : ℕ} (hn : n ∈ dim_set U) : {x : P // x ∈ U ∧ n = dim x} :=
+def pick {n : ℕ} (hn : n ∈ dim_set U) : {x : P // x ∈ U ∧ n = dim' x} :=
 begin
   convert (classical.indefinite_description _ hn), 
   simp,
@@ -376,7 +427,7 @@ end
 
 noncomputable
 def undounded_pick_greater (h : ∀ (N : ℕ), ∃ (n : ℕ), n ∈ dim_set U ∧ N < n) (n : ℕ) : 
-  {x : P // n < dim x } :=
+  {x : P // n < dim' x } :=
 begin
   have k := classical.indefinite_description _ (h n),
   have pt := pick U k.prop.left,
@@ -388,7 +439,7 @@ end
 variables {U} (x0 : P) (hx0 : x0 ∈ U)
 
 noncomputable
-def next (h : ∀ (N : ℕ), ∃ (n : ℕ), n ∈ dim_set U ∧ N < n) (xn : P) := undounded_pick_greater U h (dim xn)
+def next (h : ∀ (N : ℕ), ∃ (n : ℕ), n ∈ dim_set U ∧ N < n) (xn : P) := undounded_pick_greater U h (dim' xn)
 
 noncomputable
 def dim_seq (h : ∀ (N : ℕ), ∃ (n : ℕ), n ∈ dim_set U ∧ N < n) : ℕ → P 
@@ -396,15 +447,15 @@ def dim_seq (h : ∀ (N : ℕ), ∃ (n : ℕ), n ∈ dim_set U ∧ N < n) : ℕ 
 | (n + 1) := next h (dim_seq n)
 
 lemma dim_seq_lt_succ (h : ∀ (N : ℕ), ∃ (n : ℕ), n ∈ dim_set U ∧ N < n) :
-  ∀ n, dim (dim_seq x0 h n) < dim (dim_seq x0 h (n + 1)) :=
+  ∀ n, dim' (dim_seq x0 h n) < dim' (dim_seq x0 h (n + 1)) :=
 begin
   intro n,
   unfold dim_seq next,
-  exact (undounded_pick_greater U h (dim (dim_seq x0 h n))).prop,
+  exact (undounded_pick_greater U h (dim' (dim_seq x0 h n))).prop,
 end
 
 lemma dim_seq_lt_pred (h : ∀ (N : ℕ), ∃ (n : ℕ), n ∈ dim_set U ∧ N < n) :
-  ∀ n m, n < m → dim (dim_seq x0 h n) < dim (dim_seq x0 h m) :=
+  ∀ n m, n < m → dim' (dim_seq x0 h n) < dim' (dim_seq x0 h m) :=
 begin
   intros n m,
   induction m with m hm,
@@ -418,7 +469,7 @@ begin
     {rw hlt, apply dim_seq_lt_succ }
 end
 
-lemma dim_congr_contra (x y : P) : dim x < dim y → x ≠ y :=
+lemma dim_congr_contra (x y : P) : dim' x < dim' y → x ≠ y :=
 begin
   by_contra' h,
   have k := h.left,
@@ -471,7 +522,7 @@ noncomputable
 def upper_bound (U : set P) [is_closed U] : { N // ∀ n ∈ dim_set U, n ≤ N } := 
 classical.indefinite_description _ (bounded_dim_set U)  
 
-lemma dim_mem_dim_set (U : set P) [is_closed U] : ∀ x ∈ U, dim x ∈ dim_set U :=
+lemma dim_mem_dim_set (U : set P) [is_closed U] : ∀ x ∈ U, dim' x ∈ dim_set U :=
 begin
   intros x hx,
   use x,
@@ -482,19 +533,21 @@ end
 
 -- The upper bound
 noncomputable
-def M (U : set P) [is_closed U] := (dim.upper_bound U).val
+def M (U : set P) [is_closed U] : ℤ := (dim.upper_bound U).val
 
--- The fact that it's an upper bound
-lemma M_prop {U : set P} [is_closed U] : ∀ x ∈ U, dim x ≤ M U :=
+-- The fact that it's an upper bound, with the correct def of dim 
+lemma M_prop {U : set P} [is_closed U] : ∀ x ∈ U, dim x ≤ (M U : ℤ) :=
 begin
   intros x hx,
-  exact (upper_bound U).prop (dim x) (dim_mem_dim_set U x hx)
+  have k := (upper_bound U).prop (dim' x) (dim_mem_dim_set U x hx),
+  rw dim_eq_dim',
+  apply int.coe_nat_le_coe_nat_of_le k,
 end
 
 end dim
 
 noncomputable
-def dim_set : finset ℕ := 
+def dim_set : finset ℤ := 
 finset.filter (λ n, ∃ x ∈ U, n = dim x) (finset.Icc 0 (dim.M U))
 
 lemma dim_set_complete : ∀ x ∈ U, dim x ∈ dim_set U :=
@@ -502,7 +555,7 @@ begin
   intros x hx,
   erw finset.mem_filter,
   split,
-  { rw finset.mem_Icc, simp, apply dim.M_prop _ hx },
+  { rw finset.mem_Icc, apply and.intro (dim_pos x) (dim.M_prop _ hx) },
   { use x, use hx }
 end
 
@@ -514,7 +567,7 @@ end
 @[simp] lemma dim_set_of_is_empty (hempty : U = ∅) : dim_set U = ∅ :=
 begin
   unfold dim_set, ext, simp,
-  intros hle x hx,
+  intros _ hle x hx,
   rw [hempty, set.mem_empty_iff_false] at hx,
   exfalso,
   exact hx
@@ -522,7 +575,7 @@ end
 
 -- 1.1.14 (Dimension of a subset)
 noncomputable
-def Dim [is_closed U] : with_bot ℕ := finset.max (dim_set U)
+def Dim [is_closed U] : with_bot ℤ := finset.max (dim_set U)
 
 lemma Dim_empty : Dim (∅ : set P) = ⊥ := by { unfold Dim, simp }
 
@@ -536,7 +589,7 @@ end
 
 -- To work directly in ℕ with non empty sets
 noncomputable
-def Dim' [is_closed U] (hnempty : U.nonempty) : ℕ := 
+def Dim' [is_closed U] (hnempty : U.nonempty) : ℤ := 
 finset.max' (dim_set U) (dim_set_nonempty_of_U_nonempty hnempty)
 
 lemma Dim_eq_Dim' [is_closed U] (hnempty : U.nonempty) : some (Dim' U hnempty) = Dim U :=
@@ -572,7 +625,7 @@ def coDim {U : set P} [is_closed U] {x : P} (hx : x ∈ U) : ℤ :=
 def coDim_positive {U : set P} [is_closed U] {x : P} (hx : x ∈ U) : 0 ≤ coDim hx :=
 begin
   unfold coDim,
-  rw [sub_nonneg, nat.cast_le],
+  rw [sub_nonneg],
   apply finset.le_max' _ _ (dim_set_complete _ _ hx)
 end
 
@@ -582,8 +635,6 @@ def pure (U : set P) [is_closed U] :=
 
 
 /- 1.2. Orientation and boundaries -/
-
-variable (P)
 
 -- We use bool in place of + / - so that all operations (eg ¬) are already implemented 
 -- Convention : tt <-> + and ff <-> -
@@ -605,6 +656,14 @@ instance : has_coe_to_sort ogpos Type* := ⟨λ X, X.P⟩
 
 instance (P : ogpos) : graded P.P := P.P_graded
 
+lemma eq_edges_orientation {P : ogpos} {x y : P} (e e' : x ⟶ y) : 
+  P.ε e = P.ε e' := by  rw subsingleton.elim e e'
+
+@[simp] lemma neg_eq_orientation {P : ogpos} {x y : P} {e : x ⟶ y} {α : bool} : ¬ P.ε e = α ↔ P.ε e = !α :=
+begin
+  nth_rewrite 0 ←bnot_bnot α,
+  rw bool.not_eq_bnot,
+end
 -- Remark 1.2.4. TODO
 
 
@@ -649,20 +708,56 @@ exists.elim hy (λ h _, h)
 
 -- 1.2.6 (Input and output boundaries)
 -- We allow n < 0 in the general case, and set it to ∅ in that case, for convenience
-def sΔ' (α : bool) (n : nat) (U : set P) [is_closed U] : set P := 
-{x ∈ grading U n | coΔ (to_bool (¬↥α)) x ∩ U = ∅}
+def sΔ' (α : bool) (n : ℤ) (U : set P) [is_closed U] : set P := 
+{x ∈ grading U n | coΔ (!α) x ∩ U = ∅}
 
-def sΔ (α : bool) (n : int) (U : set P) [is_closed U] : set P := 
-dite (0 ≤ n) (λ (h : 0 ≤ n), sΔ' α n.to_nat U) (λ _, ∅)
+def sΔ (α : bool) (n : ℤ) (U : set P) [is_closed U] : set P := 
+dite (0 ≤ n) (λ (h : 0 ≤ n), sΔ' α n U) (λ _, ∅)
 
-def δ' (α : bool) (n : nat) (U : set P) [is_closed U] : set P := 
+def δ' (α : bool) (n : ℤ) (U : set P) [is_closed U] : set P := 
 cl (sΔ α n U) ∪ ⋃ (k : finset.Ico 0 n), cl (grading (Max U) k)
 
 def δ (α : bool) (n : int) (U : set P) [is_closed U] : set P :=
-dite (0 ≤ n) (λ (h : 0 ≤ n), δ' α n.to_nat U) (λ _, ∅)
-  
+dite (0 ≤ n) (λ (h : 0 ≤ n), δ' α n U) (λ _, ∅)
+
 lemma Δ_eq_sΔ_cl_singleton (α : bool) (x : P) : Δ α x = sΔ α (dim x - 1) (cl {x}) :=
 begin
-  sorry
+  by_cases (1 ≤ dim x); unfold sΔ; simp [h],
+  { unfold Δ sΔ', ext y, simp, split; intro h1,
+    { cases h1 with h1 e,
+      erw mem_set_of, split,
+      { rw mem_cl_singleton_iff_below,
+        apply and.intro (covby.le h1),
+        simp,
+        rw finite.eq_pred_eq_succ,
+        apply dim_plus_one_of_covby h1},
+      { ext w, 
+        rw [mem_inter_iff, mem_empty_iff_false, iff_false, mem_cl_singleton_iff_below], 
+        erw mem_set_of,
+        intro h3,
+        cases h3.left with h4 e',  
+        have hwx : w = x := eq_of_double_covby h4 h1 h3.right,
+        have Ph14 : P.ε h1 = P.ε h4 := 
+        begin
+          rw hwx at h4,
+          convert eq_edges_orientation (hom_of_cov h1) (hom_of_cov h4),
+        end,
+        rw [e, e'] at Ph14,
+        cases α; rw bnot at Ph14; injection Ph14 } },
+    { erw [mem_sep_iff, finite.eq_pred_eq_succ, mem_cl_singleton_iff_below] at h1,
+      let e := covby_of_dim_plus_one_of_le h1.left.left h1.left.right,
+      use e, 
+      by_contra' h,
+      rw neg_eq_orientation at h,
+      apply not_mem_empty x, 
+      rw [←h1.right, mem_inter_iff],
+      exact and.intro ⟨e, h⟩ (subset_cl _ (mem_singleton x)) } },
+  { by_cases h1 : (dim x = ↑0),
+    { rw dim_zero_iff_normal x at h1, unfold Δ, ext w,
+      rw [mem_empty_iff_false, iff_false], intro hx, rw mem_set_of_eq at hx,
+      cases hx with e hx,
+      apply not_covby_of_normal h1 w e },
+    { exfalso, apply h1, rw not_le at h, have : ↑0 ≤ dim x := dim_pos x, linarith } }
 end
+
 end faces

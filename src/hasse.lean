@@ -16,6 +16,12 @@ open quiver
 
 variable {P : FinPartialOrder}
 
+instance subsingleton_hom_set (x y : P) : subsingleton (x ⟶ y) :=
+begin
+  apply subsingleton.intro, intros e e',
+  refl
+end
+
 def hom_of_cov {x y : P} (hcov : y ⋖ x) : x ⟶ y := hcov
 def path_of_cov {x y : P} (hcov : y ⋖ x) : path x y := hom.to_path (hom_of_cov hcov)
 def cov_of_hom {x y : P} (f : x ⟶ y) : y ⋖ x := f
@@ -32,6 +38,15 @@ lemma lt_of_path {x y : P} (hneq : x ≠ y) (p : path y x) : x < y :=
 begin 
   rw lt_iff_le_and_ne,
   exact and.intro (le_of_path p) hneq
+end
+
+lemma covby_of_length_one  {x y : P} (p : path y x) (hl : p.length = 1) : x ⋖ y :=
+begin
+  cases p with w _ p q,
+  { rw path.length_nil at hl, linarith },
+  { rw [path.length_cons, add_left_eq_self] at hl,  
+    rw path.eq_of_length_zero p hl,
+    exact cov_of_hom q }
 end
 
 -- Two lemmas, if we have two elements one smaller than the other,
@@ -130,6 +145,16 @@ begin
   have q := classical.indefinite_description _ p.prop,
   rw ←q.prop,
   exact q.val
+end
+
+
+lemma eq_of_double_covby {x y z : P} (h1 : x ⋖ y) (h2 : x ⋖ z) (hle : y ≤ z) : y = z :=
+eq_of_le_of_not_lt hle (h2.right h1.left)
+
+lemma eq_of_length_zero_int {x y : P} (p : path x y) (hzero : int.of_nat p.length = 0) : x = y :=
+begin
+  apply path.eq_of_length_zero p,
+  rw int.coe_nat_inj hzero,
 end
 
 end hasse
