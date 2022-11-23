@@ -69,6 +69,12 @@ begin
   ext, unfold cl, simp
 end
 
+lemma mem_is_cl_of_below {U : set P} [is_closed U] {x y : P} (hy : y ∈ U) (hle : x ≤ y) : x ∈ U :=
+begin
+  rw closed_eq_closure U at *,
+  apply mem_cl_of_below hy x hle
+end
+
 instance empty_closed : is_closed (∅ : set P) := 
 { is_eq_cl := empty_eq_cl_empty} 
 
@@ -131,6 +137,17 @@ variable (U : set P)
 
 -- 1.1.7 (Maximal element)
 def maximal (x : P) : Prop := (x ∈ U) ∧ ∀ {u}, u ∈ U → ¬(x ⋖ u)
+
+lemma eq_of_maximal_of_le [is_closed U] {x y : P} (hy : y ∈ U) (hle : x ≤ y) (hmax : maximal U x) : x = y :=
+begin
+  rw le_iff_lt_or_eq at hle,
+  cases hle,
+  { cases exists_right_cov_of_lt hle with w hw,
+    exfalso,
+    apply hmax.right (mem_is_cl_of_below hy hw.right) hw.left },
+  { assumption }
+end
+
 def Max : set P := { x | maximal U x }
 
 def Max_subset : Max U ⊆ U := 
@@ -758,6 +775,14 @@ begin
   rw dif_pos hn,
 end
 
+lemma sΔ_subset {α : bool} {n : ℤ} {U : set P} : sΔ α n U ⊆ U :=
+begin
+  by_cases h : 0 ≤ n,
+  { rw sΔ_eq_sΔ' h, intros x hx, 
+    exact hx.left.left },
+  { unfold sΔ, rw dif_neg h, apply empty_subset }
+end
+
 lemma mem_sΔ_iff_mem_sΔ' {α : bool} {n : ℤ} {U : set P} (hn : 0 ≤ n) (x : P) :
   x ∈ sΔ α n U ↔ x ∈ sΔ' α n U := by rw sΔ_eq_sΔ' hn
 
@@ -772,6 +797,15 @@ begin
   unfold δ,
   rw dif_pos hn,
 end
+
+-- TODO if needed 
+-- lemma δ_subset {α : bool} {n : ℤ} {U : set P} : δ α n U ⊆ U :=
+-- begin
+--   by_cases h : 0 ≤ n,
+--   { rw δ_eq_δ' h, intros x hx, 
+--     exact hx.left.left },
+--   { unfold sΔ, rw dif_neg h, apply empty_subset }
+-- end
 
 lemma mem_δ_iff_mem_δ' {α : bool} {n : ℤ} {U : set P} (hn : 0 ≤ n) (x : P) : 
   x ∈ δ α n U ↔ x ∈ δ' α n U := by rw δ_eq_δ' hn
@@ -843,4 +877,45 @@ begin
     apply le_of_lt k.prop }
 end
 
+lemma sΔ_subset_δ (U : set P) [is_closed U] (α : bool) (n : ℤ) :
+  sΔ α n U ⊆ grading (δ α n U) n :=
+begin
+  by_cases h : 0 ≤ n,
+  { rw δ_eq_δ' h, 
+    intros x hx,
+    erw mem_set_of,
+    split,
+    { apply mem_union_left, rw sΔ_eq_sΔ' h at |- hx,
+      apply subset_cl _ hx },
+    { simp only, 
+      rw sΔ_eq_sΔ' h at hx,
+      exact hx.left.right } },
+  { unfold sΔ δ, rw [dif_neg h, dif_neg h], exact empty_subset _ } 
+end
+
+--Lemma 1.2.10 -- point 1
+lemma nth_grading_nth_boundary_eq_Δ (U : set P) [is_closed U] (α : bool) (n : ℤ) : 
+  grading (δ α n U) n = sΔ α n U :=
+begin
+  refine subset_antisymm _ (sΔ_subset_δ U α n),
+  intros x hx,
+  by_cases h : 0 ≤ n,
+  { cases hx,
+    rw sΔ_eq_sΔ' h,
+    rw δ_eq_δ' h at hx_left,
+    cases hx_left, 
+    { cases hx_left with w hw, cases hw with hw hle,
+      have hwU := sΔ_subset hw,
+      erw [mem_sep_iff, mem_sep_iff],
+      have hxU := mem_is_cl_of_below hwU hle,
+      apply and.intro (and.intro hxU hx_right),
+      sorry 
+    },
+    sorry
+  },
+  { exfalso,
+    rw ←hx.right at h,
+    exact h (dim_pos x) }
+end
 end faces
+ 
