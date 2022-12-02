@@ -1118,7 +1118,7 @@ begin
 end
 
 -- Lemma 2.2.11 -- point 2 -- (Max U)_n = U_n
-lemma Dim_grading_Max_eq_Dim_grading (U : set P) [is_closed U] :
+lemma Dim_grading_Max_eq_Dim_grading [is_closed U] :
   grading (Max U) (Dim U) = grading U (Dim U) :=
 begin
   by_cases h : U.nonempty,
@@ -1138,7 +1138,7 @@ begin
 end
 
 -- Lemma 2.2.11 -- point 2 -- (Max U)_n = Δ^α_n U
-lemma Dim_grading_Max_eq_sΔ (U : set P) [is_closed U] (α : bool) :
+lemma Dim_grading_Max_eq_sΔ [is_closed U] (α : bool) :
   grading (Max U) (Dim U) = sΔ α (Dim U) U :=
 begin
   by_cases h : U.nonempty,
@@ -1158,5 +1158,20 @@ begin
     exact h }
 end
 
+-- Lemma 1.2.12 -- point 1
+lemma δ_subset {α : bool} {n : ℤ} {U : set P} [is_closed U] : δ α n U ⊆ U :=
+begin
+  by_cases h : 0 ≤ n,
+  { rw δ_eq_δ' h, 
+    erw [union_subset_iff, ←closure_Union_eq_Union_closure],
+    split; apply closure_sub,
+    { apply sΔ_subset },
+    { intros x hx,
+      rw mem_Union at hx,
+      cases hx with k hk,
+      apply Max_subset, 
+      exact hk.left } },
+  { unfold δ, rw dif_neg h, apply empty_subset }
+end
 end faces
  
