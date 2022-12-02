@@ -60,18 +60,18 @@ end
 
 -- 1.1.4 (Closed subset)
 class is_closed (U : set P) : Prop :=
-(is_eq_cl : U = cl U)
+(is_eq_cl : cl U = U)
 
-lemma closed_eq_closure (U : set P) [is_closed U] : U = cl U := is_closed.is_eq_cl
+lemma closed_eq_closure (U : set P) [is_closed U] : cl U = U := is_closed.is_eq_cl
  
-lemma empty_eq_cl_empty : (∅ : set P) = cl ∅ :=
+lemma empty_eq_cl_empty : cl ∅ = (∅ : set P)  :=
 begin
   ext, unfold cl, simp
 end
 
 lemma mem_is_cl_of_below {U : set P} [is_closed U] {x y : P} (hy : y ∈ U) (hle : x ≤ y) : x ∈ U :=
 begin
-  rw closed_eq_closure U at *,
+  rw ←closed_eq_closure U at *,
   apply mem_cl_of_below hy x hle
 end
 
@@ -88,18 +88,18 @@ lemma closure_monotonic (U V : set P) (hsub : U ⊆ V) : cl U ⊆ cl V :=
 -- Lemma 1.1.5 - part 2
 lemma closure_sub {U V: set P} [is_closed V] (hsub : U ⊆ V) : cl U ⊆ V :=
 begin
-  rw closed_eq_closure V,
+  rw ←closed_eq_closure V,
   exact closure_monotonic _ _ hsub,
 end
 
-lemma closure_indempotent (U : set P) : cl U = cl (cl U) :=
+lemma closure_indempotent (U : set P) : cl (cl U) = cl U :=
 begin
   apply subset_antisymm,
-  { exact subset_cl _ },
   { intros x hx,
     cases hx with w hw,
     cases hw with hw hlew,
-    apply mem_cl_of_below hw _ hlew }
+    apply mem_cl_of_below hw _ hlew },
+    { exact subset_cl _ }
 end
 
 instance closure_is_closed (U : set P) : is_closed (cl U) := 
@@ -118,7 +118,7 @@ begin
 end
 
 -- Lemma 1.1.6
-lemma closure_union_eq_union_closure (ι : Sort*) (s : ι → set P) : cl (⋃ i, s i) = ⋃ i, cl (s i) :=
+lemma closure_Union_eq_Union_closure (ι : Sort*) (s : ι → set P) : cl (⋃ i, s i) = ⋃ i, cl (s i) :=
 begin
   ext, split,
   { rintro ⟨y, ⟨hin, hle⟩⟩,
@@ -132,6 +132,23 @@ begin
     rw mem_Union,
     exact ⟨i, hin⟩ }
 end 
+
+-- It is basically easier to redo the proof that to use the previous one
+lemma closure_union_eq_union_closure (U V : set P) : cl (U ∪ V) = cl U ∪ cl V :=
+begin
+  ext, split,
+  { rintro ⟨y, ⟨hin, hle⟩⟩,
+    cases hin,
+    left, use y,
+    exact and.intro hin hle, 
+    right, use y,
+    exact and.intro hin hle },
+  { intros hx,
+    cases hx; cases hx with y hy; cases hy with hy hle; use y;
+    refine and.intro _ hle, 
+    { left, exact hy },
+    { right, exact hy } }
+end
 
 variable (U : set P)
 
@@ -409,6 +426,15 @@ def grading (n : ℤ) : set P := { x ∈ U | dim x = n }
 @[simp] lemma mem_grading_dim (x : P) (hx : x ∈ U) : x ∈ grading U (dim x) :=
 begin
   unfold grading, simp [hx],
+end
+
+lemma grading_empty_of_dim_le_zero (n : ℤ) (hle : ¬ (0 ≤ n)) : grading U n = ∅ :=
+begin
+  rw eq_empty_iff_forall_not_mem, 
+  intros x hx,
+  apply hle,
+  rw ←hx.right,
+  apply dim_pos
 end
 
 lemma eq_union_grading : U = ⋃ n, grading U n :=
@@ -818,14 +844,14 @@ begin
   rw dif_pos hn,
 end
 
--- TODO if needed 
--- lemma δ_subset {α : bool} {n : ℤ} {U : set P} : δ α n U ⊆ U :=
--- begin
---   by_cases h : 0 ≤ n,
---   { rw δ_eq_δ' h, intros x hx, 
---     exact hx.left.left },
---   { unfold sΔ, rw dif_neg h, apply empty_subset }
--- end
+instance is_closed_δ' {α : bool} {n : ℤ} {U : set P} : is_closed (δ' α n U) :=
+{ is_eq_cl := 
+  begin
+    unfold δ',
+    rw [←closure_Union_eq_Union_closure, closure_union_eq_union_closure, 
+        closure_indempotent, closure_indempotent],
+  end
+}
 
 lemma mem_δ_iff_mem_δ' {α : bool} {n : ℤ} {U : set P} (hn : 0 ≤ n) (x : P) : 
   x ∈ δ α n U ↔ x ∈ δ' α n U := by rw δ_eq_δ' hn
@@ -948,6 +974,77 @@ begin
   { exfalso,
     rw ←hx.right at h,
     exact h (dim_pos x) }
+end
+
+
+--Lemma 1.2.10 -- point 2
+-- tedious proof...
+lemma max_kth_grading_nth_boundary_eq_max_kth_grading (U : set P) [is_closed U] (α : bool) (n : ℤ) (k : { k // k < n}) : 
+  grading (Max (δ α n U)) k = grading (Max U) k :=
+begin
+  by_cases h : 0 ≤ k.val,
+  { apply subset_antisymm;
+    have hn : 0 ≤ n := le_of_lt (has_lt.lt.trans_le' k.prop h),
+    { rw δ_eq_δ' hn,
+      intros x hx,
+      cases hx with hx_l hx_dim,
+      erw mem_sep_iff,
+      refine and.intro _ hx_dim,
+      cases hx_l.left with hx hx,
+      { cases hx with y hy,
+        cases hy with hy hle,
+        have hxy : x = y := 
+        begin
+          refine eq_of_maximal_of_le _ _ hle hx_l,
+          left,
+          apply subset_cl _ hy,
+        end,
+        exfalso,
+        rw sΔ_eq_sΔ' hn at hy,
+        apply lt_irrefl n,
+        rw [hxy, hy.left.right] at hx_dim,
+        nth_rewrite 0 hx_dim,
+        exact k.prop },
+      { rw set.mem_Union at hx,
+        cases hx with i hi,
+        cases hi with y hy,
+        cases hy with hy hle,
+        have hxy : x = y := 
+        begin
+          refine eq_of_maximal_of_le _ _ hle hx_l,
+          right,
+          rw set.mem_Union, use i,
+          apply subset_cl _ hy,
+        end,
+        rw hxy,
+        exact hy.left } },
+    { intros x hx,
+      erw mem_set_of,
+      refine and.intro _ hx.right,
+      erw mem_set_of,
+      erw δ_eq_δ' hn,
+      split,
+      { right, rw mem_Union, use k,
+        apply subset_cl _ hx, },
+      { intros u hu hcov,
+        cases hu,
+        { cases hu with y hy,
+          cases hy with hy hle,
+          have hmax := hx.left,
+          erw mem_set_of at hmax,
+          apply hmax.right _ hcov,
+          apply mem_is_cl_of_below _ hle, exact _inst_1,
+          apply sΔ_subset hy },
+        { rw mem_Union at hu,
+          cases hu with i hu,
+          cases hu with y hy,
+          cases hy with hy hle,
+          cases hx.left,
+          apply right _ hcov,
+          apply mem_is_cl_of_below _ hle, exact _inst_1,
+          apply Max_subset _ hy.left } } } },
+  { erw grading_empty_of_dim_le_zero _ _ h,
+    erw grading_empty_of_dim_le_zero _ _ h }
 end
 end faces
  
