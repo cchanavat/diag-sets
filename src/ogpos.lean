@@ -366,6 +366,14 @@ begin
   rw [path.length_comp, path.length_cons, path.length_nil, zero_add, add_comm, int.coe_nat_add], 
 end
 
+lemma dim_st_monotonic {x y : P} (hlt : x < y) : dim x < dim y :=
+begin
+  cases exists_left_cov_of_lt hlt,
+  apply has_le.le.trans_lt (dim_monotonic h.left),
+  rw ←dim_plus_one_of_covby h.right,
+  simp only [coe_is_one_hom.coe_one, lt_add_iff_pos_right, zero_lt_one],
+end
+
 lemma covby_of_dim_plus_one_of_le {x y : P} (hle : y ≤ x) (hdim : dim y + 1 = dim x) : y ⋖ x :=
 begin
   have hlt : y < x := 
@@ -379,6 +387,18 @@ begin
   rw [length_dim (maximal_path_concat (path_of_lt hlt) (max_path y)), 
       length_dim (max_path y), maximal_path_concat.path, path.length_comp, int.coe_nat_add] at hdim,
   linarith
+end
+
+lemma eq_of_le_of_eq_dim {x y : P} (hle : x ≤ y) (hdim : dim x = dim y) : x = y :=
+begin
+  rw le_iff_lt_or_eq at hle,
+  cases hle,
+  { exfalso, 
+    have hdim' := dim_st_monotonic hle,
+    rw hdim at hdim',
+    apply lt_irrefl (dim y),
+    exact hdim' },
+  { assumption }
 end
 
 variables (U) 
@@ -894,7 +914,7 @@ begin
 end
 
 --Lemma 1.2.10 -- point 1
-lemma nth_grading_nth_boundary_eq_Δ (U : set P) [is_closed U] (α : bool) (n : ℤ) : 
+lemma nth_grading_nth_boundary_eq_sΔ (U : set P) [is_closed U] (α : bool) (n : ℤ) : 
   grading (δ α n U) n = sΔ α n U :=
 begin
   refine subset_antisymm _ (sΔ_subset_δ U α n),
@@ -904,15 +924,27 @@ begin
     rw sΔ_eq_sΔ' h,
     rw δ_eq_δ' h at hx_left,
     cases hx_left, 
-    { cases hx_left with w hw, cases hw with hw hle,
-      have hwU := sΔ_subset hw,
-      erw [mem_sep_iff, mem_sep_iff],
-      have hxU := mem_is_cl_of_below hwU hle,
-      apply and.intro (and.intro hxU hx_right),
-      sorry 
-    },
-    sorry
-  },
+    { cases hx_left with y hy, 
+      cases hy with hy hle,
+      rw sΔ_eq_sΔ' h at hy,
+      have hdim : dim x = dim y :=
+      begin
+        apply eq.trans hx_right,
+        symmetry,
+        erw [mem_sep_iff, mem_sep_iff] at hy,
+        exact hy.left.right
+      end,
+      rw eq_of_le_of_eq_dim hle hdim,
+      exact hy},
+    { rw set.mem_Union at hx_left,
+      cases hx_left with k hx,
+      cases hx with y hy,
+      cases hy with hy hle, 
+      exfalso,
+      apply not_lt_of_le (dim_monotonic hle),
+      rw hx_right,
+      rw hy.right,
+      exact k.prop } },
   { exfalso,
     rw ←hx.right at h,
     exact h (dim_pos x) }
