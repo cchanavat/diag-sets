@@ -622,6 +622,14 @@ begin
   { use x, use hx }
 end
 
+lemma dim_set_nonempty_of_nonempty {U : set P} (hnempty : U.nonempty) : 
+  (dim_set U).nonempty :=
+begin
+  cases hnempty with w hw,
+  use dim w,
+  apply dim_set_complete U w hw,
+end
+
 @[simp] lemma dim_set_empty : dim_set (∅ : set P) = ∅ :=
 begin
   unfold dim_set, simp,
@@ -638,30 +646,56 @@ end
 
 -- 1.1.14 (Dimension of a subset)
 noncomputable
-def Dim : with_bot ℤ := finset.max (dim_set U)
+def Dim : ℤ := 
+dite (U.nonempty) (λ h, finset.max' (dim_set U) (dim_set_nonempty_of_nonempty h)) (λ h, -1)
 
-lemma Dim_empty : Dim (∅ : set P) = ⊥ := by { unfold Dim, simp }
-
-lemma dim_set_nonempty_of_U_nonempty {U : set P} (hnempty : U.nonempty) : 
-  (dim_set U).nonempty :=
+lemma Dim_ge_minus_one : -1 ≤ Dim U :=
 begin
-  cases hnempty with w hw,
-  use dim w,
-  apply dim_set_complete U w hw,
+  unfold Dim,
+  by_cases h : U.nonempty,
+  { rw dif_pos h, 
+    cases h with x hx,
+    apply le_trans _ (finset.le_max' _ (dim x) (dim_set_complete _ _ hx)),
+    apply le_trans _ (dim_pos x),
+    linarith },
+  { rw dif_neg h }
 end
 
--- To work directly in ℕ with non empty sets
-noncomputable
-def Dim' (hnempty : U.nonempty) : ℤ := 
-finset.max' (dim_set U) (dim_set_nonempty_of_U_nonempty hnempty)
+lemma Dim_empty : Dim (∅ : set P) = -1 := by { unfold Dim, simp }
 
-lemma Dim_eq_Dim' (hnempty : U.nonempty) : some (Dim' U hnempty) = Dim U :=
-finset.coe_max' _
+lemma Dim_empty' {U : set P} (h : ¬U.nonempty) : Dim U = -1 :=
+begin
+  rw [set.nonempty_def, not_exists, ←eq_empty_iff_forall_not_mem] at h,
+  rw h,
+  exact Dim_empty
+end
+
+lemma Dim_pos {U : set P} (h : U.nonempty) : 0 ≤ Dim U := 
+begin
+  unfold Dim,
+  rw dif_pos h,
+  cases h with x hx,
+  apply le_trans (dim_pos x),
+  apply finset.le_max',
+  apply dim_set_complete U x hx
+end
+
+-- To work directly in ℤ with non empty sets
+noncomputable
+def Dim' {U : set P} (hnempty : U.nonempty) : ℤ := 
+finset.max' (dim_set U) (dim_set_nonempty_of_nonempty hnempty)
+
+lemma Dim_eq_Dim' {U : set P} (hnempty : U.nonempty) : Dim U = Dim' hnempty :=
+begin
+  unfold Dim,
+  erw dif_pos hnempty, refl,
+end
 
 -- 1.1.15
-lemma Dim'_cl_singleton (x : P) : 
-  Dim' (cl ({x} : set P)) (closure_nonempty (set.singleton_nonempty x)) = dim x :=
+lemma Dim_cl_singleton (x : P) : 
+  Dim (cl ({x} : set P)) = dim x :=
 begin
+  rw Dim_eq_Dim' ((closure_nonempty (set.singleton_nonempty x))),
   unfold Dim', 
   apply le_antisymm,
   { simp, intros y hy,
@@ -677,63 +711,51 @@ begin
     exact mem_singleton x }
 end
 
-lemma Dim_cl_singleton (x : P) : Dim (cl ({x} : set P)) = some (dim x) :=
-by { rw [←Dim_eq_Dim', Dim'_cl_singleton] }
-
-lemma dim_le_Dim' (U : set P) (hnempty : U.nonempty ): ∀ x ∈ U, dim x ≤ Dim' U hnempty :=
-begin
-  intros x hx, 
-  exact finset.le_max' _ _ (dim_set_complete U x hx)
-end
-
-lemma dim_le_Dim (U : set P) : ∀ x ∈ U, (dim x : with_bot ℤ) ≤ Dim U :=
+lemma dim_le_Dim (U : set P) : ∀ x ∈ U, dim x ≤ Dim U :=
 begin
 by_cases h : U = ∅,
   { rw [h, Dim_empty], intros x hx,
     exfalso, apply not_mem_empty x hx },
   { intros x hx, 
     rw [←ne.def, ne_empty_iff_nonempty] at h,
-    rw ←Dim_eq_Dim' U h,
-    erw with_bot.coe_le_coe,
-    apply dim_le_Dim' U h x hx }
+    rw Dim_eq_Dim' h,
+    apply finset.le_max',
+    apply dim_set_complete,
+    apply hx }
 end
 
-lemma Dim_le_iff_forall_dim_le (U : set P) (n : ℤ) : Dim U ≤ n ↔ ∀ x ∈ U, dim x ≤ n :=
+lemma Dim_le_iff_forall_dim_le {U : set P} (he : U.nonempty) (n : ℤ) : Dim U ≤ n ↔ ∀ x ∈ U, dim x ≤ n :=
 begin
-  by_cases h : U = ∅,
-  { rw [h, Dim_empty], split; intro h1,
-    { intros x hx, exfalso, apply not_mem_empty x hx },
-    { apply le_of_lt (with_bot.bot_lt_coe n) } },
-  { rw [←ne.def, ne_empty_iff_nonempty] at h,
-    split; intro h1,
-    { intros x hx, 
-      apply le_trans (dim_le_Dim' U h x hx),
-      erw [←Dim_eq_Dim' U h, with_bot.coe_le_coe] at h1,
-      exact h1 },
-    { erw [←Dim_eq_Dim' U h, with_bot.coe_le_coe],
-      apply finset.max'_le,
-      intros m hdim,
-      erw finset.mem_filter at hdim,
-      cases hdim.right with w hw, cases hw with hw hw',
-      rw hw',
-      exact h1 w hw } }
+  split; intro h,
+  { intros x hx,
+    apply le_trans _ h,
+    rw Dim_eq_Dim' he,
+    apply finset.le_max',
+    apply dim_set_complete U x hx },
+  { rw Dim_eq_Dim' he,
+    apply finset.max'_le,
+    intros k hk,
+    erw finset.mem_filter at hk,
+    cases hk.right with w hw, cases hw with hw hw',
+    rw hw',
+    exact h w hw }
 end
-
 -- 1.1.16 (Codimension of an element)
 noncomputable
 def coDim {U : set P} {x : P} (hx : x ∈ U) : ℤ := 
-  Dim' U (set.nonempty_of_mem hx) - dim x
+  Dim U - dim x
 
-def coDim_positive {U : set P} {x : P} (hx : x ∈ U) : 0 ≤ coDim hx :=
+lemma coDim_positive {U : set P} {x : P} (hx : x ∈ U) : 0 ≤ coDim hx :=
 begin
   unfold coDim,
   rw [sub_nonneg],
-  apply finset.le_max' _ _ (dim_set_complete _ _ hx)
+  apply dim_le_Dim,
+  exact hx,
 end
 
 -- 1.1.17 (Pure subset).
 def pure (U : set P) := 
-  ∀ x ∈ Max U, dim x = Dim' U (set.nonempty_of_mem (Max_subset U H))
+  ∀ x ∈ Max U, dim x = Dim' (set.nonempty_of_mem (Max_subset U H))
 
 /- 1.2. Orientation and boundaries -/
 
@@ -902,28 +924,30 @@ variables (U : set P)
 --Lemma 1.2.9
 lemma dim_δ_n_le_n (α : bool) (n : ℕ) : Dim (δ α n U) ≤ n :=
 begin
-  erw Dim_le_iff_forall_dim_le (δ α n U) (int.of_nat n),
-  rw ←int.coe_nat_eq,
-  intros x hx,
-  rw δ_eq_δ' (nat.cast_nonneg n) at hx,
-  cases hx,
-  { cases hx with y hy,
-    cases hy with hy hle,
-    rw sΔ_eq_sΔ' (nat.cast_nonneg n) at hy,
-    have k := hy.left.right,
-    rw ←hy.left.right,
-    exact dim_monotonic hle },
-  { cases hx with V hV, cases hV with hV hVin,
-    cases hV with k hk, simp only at hk,
-    rw ←hk at hVin,
-    cases hVin with y hy,
-    cases hy with hy hle,
-    apply le_trans (dim_monotonic hle),
-    rw hy.right,
-    apply le_of_lt k.prop }
+  by_cases h : (δ α n U).nonempty,
+  { rw Dim_le_iff_forall_dim_le h,
+    intros x hx,
+    rw δ_eq_δ' (nat.cast_nonneg n) at hx,
+    cases hx,
+    { cases hx with y hy,
+      cases hy with hy hle,
+      rw sΔ_eq_sΔ' (nat.cast_nonneg n) at hy,
+      have k := hy.left.right,
+      rw ←hy.left.right,
+      exact dim_monotonic hle },
+    { cases hx with V hV, cases hV with hV hVin,
+      cases hV with k hk, simp only at hk,
+      rw ←hk at hVin,
+      cases hVin with y hy,
+      cases hy with hy hle,
+      apply le_trans (dim_monotonic hle),
+      rw hy.right,
+      apply le_of_lt k.prop } },
+  { unfold Dim, rw dif_neg h,
+    linarith }
 end
 
-lemma sΔ_subset_δ (U : set P) [is_closed U] (α : bool) (n : ℤ) :
+lemma sΔ_subset_δ [is_closed U] (α : bool) (n : ℤ) :
   sΔ α n U ⊆ grading (δ α n U) n :=
 begin
   by_cases h : 0 ≤ n,
@@ -940,7 +964,7 @@ begin
 end
 
 --Lemma 1.2.10 -- point 1
-lemma nth_grading_nth_boundary_eq_sΔ (U : set P) [is_closed U] (α : bool) (n : ℤ) : 
+lemma nth_grading_nth_boundary_eq_sΔ [is_closed U] (α : bool) (n : ℤ) : 
   grading (δ α n U) n = sΔ α n U :=
 begin
   refine subset_antisymm _ (sΔ_subset_δ U α n),
@@ -979,8 +1003,8 @@ end
 
 --Lemma 1.2.10 -- point 2
 -- tedious proof...
-lemma max_kth_grading_nth_boundary_eq_max_kth_grading (U : set P) [is_closed U] (α : bool) (n : ℤ) (k : { k // k < n}) : 
-  grading (Max (δ α n U)) k = grading (Max U) k :=
+lemma Max_kth_grading_nth_boundary_eq_Max_kth_grading [is_closed U] (α : bool) (n : ℤ) 
+  (k : { k // k < n}) : grading (Max (δ α n U)) k = grading (Max U) k :=
 begin
   by_cases h : 0 ≤ k.val,
   { apply subset_antisymm;
@@ -1046,5 +1070,93 @@ begin
   { erw grading_empty_of_dim_le_zero _ _ h,
     erw grading_empty_of_dim_le_zero _ _ h }
 end
+
+lemma maximal_iff_no_coΔ {x : P} : maximal U x ↔ (x ∈ U) ∧ ∀ α : bool, coΔ α x ∩ U = ∅ :=
+begin
+  split; intro h,
+  { apply and.intro h.left,
+    intro α,
+    rw eq_empty_iff_forall_not_mem,
+    intros y hy,
+    cases hy.left with e _,
+    apply h.right hy.right e },
+  { apply and.intro h.left,
+    intros u hu hcov,
+    cases h with _ h,
+    specialize h (P.ε hcov),
+    rw eq_empty_iff_forall_not_mem at h,
+    specialize h u,
+    apply h,
+    apply mem_inter _ hu,
+    erw mem_set_of,
+    use hcov }
+end
+
+-- Lemma 2.2.11 -- point 1
+lemma nth_grading_Max_eq_inter_sΔ (U : set P) [is_closed U] (n : ℤ) : 
+  grading (Max U) n = sΔ tt n U ∩ sΔ ff n U :=
+begin
+  by_cases h : 0 ≤ n,
+  { ext,
+    split; intro hx,
+    { cases hx,
+      erw mem_set_of at hx_left,
+      rw maximal_iff_no_coΔ at hx_left,
+      rw [mem_inter_iff, sΔ_eq_sΔ' h, sΔ_eq_sΔ' h],
+      repeat {erw mem_sep_iff},
+      apply and.intro 
+        (and.intro ((and.intro hx_left.left hx_right)) (hx_left.right (!tt))) 
+        (and.intro ((and.intro hx_left.left hx_right)) (hx_left.right (!ff))) },
+    { erw [mem_set_of, mem_set_of],
+      rw [sΔ_eq_sΔ' h, sΔ_eq_sΔ' h] at hx,
+      rw maximal_iff_no_coΔ, simp only,
+      apply and.intro (and.intro hx.left.left.left _) hx.left.left.right,
+      intro α, cases α,
+      exact hx.left.right,
+      exact hx.right.right } },
+  { unfold sΔ, rw [  grading_empty_of_dim_le_zero _ n h,dif_neg h, dif_neg h, empty_inter] }
+end
+
+-- Lemma 2.2.11 -- point 2 -- (Max U)_n = U_n
+lemma Dim_grading_Max_eq_Dim_grading (U : set P) [is_closed U] :
+  grading (Max U) (Dim U) = grading U (Dim U) :=
+begin
+  by_cases h : U.nonempty,
+  { apply subset_antisymm; intros x hx; erw mem_sep_iff; apply and.intro _ hx.right,
+    { apply Max_subset _ hx.left },
+    { erw mem_set_of, 
+      apply and.intro hx.left,
+      intros u hu hcov,
+      apply lt_irrefl (Dim U),
+      have hdim := dim_plus_one_of_covby hcov,
+      have hdim_u := dim_le_Dim U u hu,
+      rw ←hdim at hdim_u,
+      rw hx.right at hdim_u,
+      erw int.add_one_le_iff at hdim_u,
+      exact hdim_u } },
+  { rw Dim_empty' h, rw [grading_empty_of_dim_le_zero, grading_empty_of_dim_le_zero]; linarith }
+end
+
+-- Lemma 2.2.11 -- point 2 -- (Max U)_n = Δ^α_n U
+lemma Dim_grading_Max_eq_sΔ (U : set P) [is_closed U] (α : bool) :
+  grading (Max U) (Dim U) = sΔ α (Dim U) U :=
+begin
+  by_cases h : U.nonempty,
+  { apply subset_antisymm,
+    { rw nth_grading_Max_eq_inter_sΔ, 
+      intros x hx,
+      cases α,
+      exact hx.right,
+      exact hx.left },
+    { rw Dim_grading_Max_eq_Dim_grading, 
+      intros x hx,
+      apply and.intro (sΔ_subset hx),
+      rw sΔ_eq_sΔ' (Dim_pos h) at hx,
+      exact hx.left.right } },
+  { rw [Dim_grading_Max_eq_Dim_grading, Dim_empty'], 
+    unfold sΔ, rw [dif_neg, grading_empty_of_dim_le_zero]; linarith,
+    exact h }
+end
+
 end faces
  
