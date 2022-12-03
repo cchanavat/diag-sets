@@ -3,6 +3,7 @@ import order.locally_finite
 import order.succ_pred.basic
 import data.set.basic
 import data.nat.interval
+import data.nat.lattice
 import data.int.interval
 import init.data.bool.lemmas
 
@@ -703,6 +704,17 @@ begin
   apply dim_set_complete U x hx
 end
 
+lemma Dim_to_nat_eq_Dim {U : set P} (h : U.nonempty) : Dim U = (Dim U).to_nat :=
+begin
+  rw int.to_nat_of_nonneg (Dim_pos h),
+end 
+lemma Dim_nonempty {U : set P} (h : 0 ≤ Dim U) : U.nonempty :=
+begin
+  by_contra he,
+  unfold Dim at h,
+  erw dif_neg he at h,
+  linarith
+end
 -- To work directly in ℤ with non empty sets
 noncomputable
 def Dim' {U : set P} (hnempty : U.nonempty) : ℤ := 
@@ -1282,6 +1294,31 @@ begin
           apply and.intro k.prop, rw ne.def,
           exact hkDim },
         { exact hk } } } }
+end
+
+-- Auxiliary lemma for next Corollary
+lemma Dim_mem_Dim_eq_min_nonempty [is_closed U] (h : U.nonempty) : 
+  (Dim U).to_nat ∈ {n : ℕ | ∀ α, δ α n U = U} :=
+begin
+  rw mem_set_of, 
+  intro α,
+  rw [δ_eq_iff_Dim_le_n, int.to_nat_of_nonneg (Dim_pos h)] 
+end
+-- Corollary 1.2.13
+lemma Dim_eq_min' [is_closed U] (h : U.nonempty) (n : ℕ) : 
+  (Dim U).to_nat = @Inf ℕ _ {n : ℕ | ∀ α, δ α n U = U} :=
+begin
+  apply linarith.eq_of_not_lt_of_not_gt; intro hlt,
+  { apply nat.not_mem_of_lt_Inf hlt,
+    apply Dim_mem_Dim_eq_min_nonempty U h },
+  { have hmem := Inf_mem (nonempty_of_mem (Dim_mem_Dim_eq_min_nonempty U h)), 
+    rw mem_set_of at hmem,
+    specialize hmem tt,
+    rw δ_eq_iff_Dim_le_n at hmem,
+    apply not_le_of_lt hlt,
+    rw ←@nat.cast_le ℤ,
+    rw int.to_nat_of_nonneg (Dim_pos h),
+    exact hmem }
 end
 
 
