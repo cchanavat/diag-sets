@@ -337,6 +337,7 @@ def max_path (x : P) :=  @is_graded.max_path _ _ (graded.all_graded x)
 
 -- 1.1.10 (Dimension of an element)
 def dim (x : P) : ℤ := (max_path x).path.length
+
 lemma dim_pos (x : P) : 0 ≤ dim x := nat.cast_nonneg _
 
 def length_dim {x : P} (p : maximal_path x) : dim x = p.path.length :=
@@ -437,23 +438,13 @@ begin
   apply dim_pos
 end
 
-lemma eq_union_grading : U = ⋃ n, grading U n :=
+lemma eq_Union_grading : U = ⋃ n, grading U n :=
 begin
   apply subset_antisymm; intros x hx; simp at *,
   { use dim x, simp [hx]},
   { cases hx with _ h, erw mem_set_of_eq at h,
     exact h.left }
 end
-
--- lemma mem_grading_pred_dim_iff_cov {x y : P} : y ∈ grading (cl ({x} : set P)) (dim x - 1) ↔ x ⋖ y := 
--- begin
---   erw mem_sep_iff,
---   split; intro h, sorry, sorry,
-
--- end
-
--- variable [is_closed U]
-
 
 -- Various auxiliary results about dimension of a subset
 namespace dim
@@ -622,6 +613,27 @@ begin
   { use x, use hx }
 end
 
+lemma mem_dim_set_bound : ∀ n ∈ dim_set U, n ∈ (finset.Icc 0 (dim.M U)) := 
+begin
+  intros n hn, erw finset.mem_filter at hn,
+  exact hn.left
+end
+
+lemma dim_set_monotonic {U V : set P} (hsub : U ⊆ V) : dim_set U ⊆ dim_set V :=
+begin
+  intros n hn,
+  erw finset.mem_filter at *,
+  cases hn.right,
+  cases h with hw heq,
+  have hin : n ∈ dim_set V :=
+  begin
+    rw heq,
+    apply dim_set_complete _ w (hsub hw)
+  end,
+  apply and.intro (mem_dim_set_bound V n hin),
+  use w, exact and.intro (hsub hw) heq
+end
+
 lemma dim_set_nonempty_of_nonempty {U : set P} (hnempty : U.nonempty) : 
   (dim_set U).nonempty :=
 begin
@@ -670,6 +682,17 @@ begin
   exact Dim_empty
 end
 
+lemma Dim_monotonic {U V : set P} (hsub : U ⊆ V) : Dim U ≤ Dim V :=
+begin
+  unfold Dim,
+  by_cases hU : U.nonempty,
+  { rw [dif_pos hU, dif_pos (nonempty.mono hsub hU)],
+    apply finset.max'_subset,
+    apply dim_set_monotonic hsub },
+  { rw dif_neg hU,
+    apply Dim_ge_minus_one }
+end
+
 lemma Dim_pos {U : set P} (h : U.nonempty) : 0 ≤ Dim U := 
 begin
   unfold Dim,
@@ -689,6 +712,55 @@ lemma Dim_eq_Dim' {U : set P} (hnempty : U.nonempty) : Dim U = Dim' hnempty :=
 begin
   unfold Dim,
   erw dif_pos hnempty, refl,
+end
+
+lemma nth_grading_empty_of_Dim_lt_n (n : ℤ) (hlt : Dim U < n) : grading U n = ∅ :=
+begin
+  by_contra,
+  rw [←ne.def, ne_empty_iff_nonempty] at h,
+  cases h with x hx,
+  rw [←hx.right, ←not_le] at hlt,
+  apply hlt,
+  by_cases hU : U.nonempty,
+  { rw Dim_eq_Dim' hU, 
+    apply finset.le_max',
+    apply dim_set_complete,
+    apply hx.left },
+  { exfalso,
+    apply hU,
+    apply nonempty_of_mem hx.left }
+end
+
+lemma eq_Union_grading_bounded : (⋃ k : {k // k ≤ Dim U}, grading U k) = U :=
+begin
+  apply subset_antisymm; intros x hx, 
+  { rw mem_Union at hx,
+    cases hx with k hk,
+    exact hk.left },
+  { by_cases h : U.nonempty,
+    { rw mem_Union,
+      use dim x, 
+      rw Dim_eq_Dim' h,
+      apply finset.le_max',
+      apply dim_set_complete U x hx,
+      apply mem_grading_dim U x hx },
+    { exfalso, 
+      apply h,
+      apply nonempty_of_mem hx } }
+end
+
+lemma eq_Union_grading_bounded' (n : ℤ) (hle : Dim U ≤ n) : (⋃ k : {k // k ≤ n}, grading U k) = U :=
+begin
+  nth_rewrite_rhs 0 ←eq_Union_grading_bounded U,
+  
+  apply subset_antisymm; intros x hx; rw mem_Union at *; cases hx with k hk,
+  { use k,
+    { by_contra' hc, rw nth_grading_empty_of_Dim_lt_n U _ hc at hk,
+      apply not_mem_empty _ hk },
+    { exact hk } },
+  { use k,
+    apply le_trans k.prop hle,
+    exact hk }
 end
 
 -- 1.1.15
@@ -1000,7 +1072,6 @@ begin
     exact h (dim_pos x) }
 end
 
-
 --Lemma 1.2.10 -- point 2
 -- tedious proof...
 lemma Max_kth_grading_nth_boundary_eq_Max_kth_grading [is_closed U] (α : bool) (n : ℤ) 
@@ -1092,7 +1163,7 @@ begin
     use hcov }
 end
 
--- Lemma 2.2.11 -- point 1
+-- Lemma 1.2.11 -- point 1
 lemma nth_grading_Max_eq_inter_sΔ (U : set P) [is_closed U] (n : ℤ) : 
   grading (Max U) n = sΔ tt n U ∩ sΔ ff n U :=
 begin
@@ -1117,7 +1188,7 @@ begin
   { unfold sΔ, rw [  grading_empty_of_dim_le_zero _ n h,dif_neg h, dif_neg h, empty_inter] }
 end
 
--- Lemma 2.2.11 -- point 2 -- (Max U)_n = U_n
+-- Lemma 1.2.11 -- point 2 -- (Max U)_n = U_n
 lemma Dim_grading_Max_eq_Dim_grading [is_closed U] :
   grading (Max U) (Dim U) = grading U (Dim U) :=
 begin
@@ -1137,7 +1208,7 @@ begin
   { rw Dim_empty' h, rw [grading_empty_of_dim_le_zero, grading_empty_of_dim_le_zero]; linarith }
 end
 
--- Lemma 2.2.11 -- point 2 -- (Max U)_n = Δ^α_n U
+-- Lemma 1.2.11 -- point 2 -- (Max U)_n = Δ^α_n U
 lemma Dim_grading_Max_eq_sΔ [is_closed U] (α : bool) :
   grading (Max U) (Dim U) = sΔ α (Dim U) U :=
 begin
@@ -1173,5 +1244,46 @@ begin
       exact hk.left } },
   { unfold δ, rw dif_neg h, apply empty_subset }
 end
+
+lemma δ_eq_iff_Dim_le_n (α : bool) (n : ℕ) (U : set P) [is_closed U] : δ α n U = U ↔ Dim U ≤ n :=
+begin
+  split,
+  { contrapose, intros h he,
+    rw not_le at h,
+    have hdim : Dim (δ α n U) < Dim U := has_le.le.trans_lt (dim_δ_n_le_n U α n) h,
+    rw he at hdim,
+    exact (lt_irrefl _ hdim) },
+  { intros hn,
+    apply subset_antisymm,
+    apply δ_subset,
+    have hU : U = ⋃ k : { k // k ≤ Dim U}, cl (grading (Max U) k) :=
+    begin
+      conv_lhs
+      { rw U_eq_cl_MaxU U,
+        rw ←eq_Union_grading_bounded' (Max U) (Dim U) (Dim_monotonic (Max_subset U)),
+        rw closure_Union_eq_Union_closure }
+    end,
+    nth_rewrite 0 hU,
+    intros x hx,
+    rw δ_eq_δ' (nat.cast_nonneg n), 
+    unfold δ', 
+    rw le_iff_lt_or_eq at hn,
+    cases hn; rw mem_Union at hx; cases hx with k hk,
+    { right, rw mem_Union, use k,
+      apply has_lt.lt.trans_le' hn k.prop,
+      exact hk },
+    { by_cases hkDim : ↑k = Dim U,
+      { left,
+        rw [←hn, ←Dim_grading_Max_eq_sΔ], rw hkDim at hk,
+        exact hk },
+      { right, rw mem_Union, use k,
+        rw ←hn,
+        { rw lt_iff_le_and_ne,
+          apply and.intro k.prop, rw ne.def,
+          exact hkDim },
+        { exact hk } } } }
+end
+
+
 end faces
  
