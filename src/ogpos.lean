@@ -1304,7 +1304,7 @@ begin
   intro α,
   rw [δ_eq_iff_Dim_le_n, int.to_nat_of_nonneg (Dim_pos h)] 
 end
--- Corollary 1.2.13
+
 lemma Dim_eq_min' [is_closed U] (h : U.nonempty) (n : ℕ) : 
   (Dim U).to_nat = @Inf ℕ _ {n : ℕ | ∀ α, δ α n U = U} :=
 begin
@@ -1321,6 +1321,13 @@ begin
     exact hmem }
 end
 
+-- Corollary 1.2.13
+lemma Dim_eq_min [is_closed U] (h : U.nonempty) (n : ℕ) :
+  Dim U = @Inf ℕ _ {n : ℕ | ∀ α, δ α n U = U} :=
+begin
+  rw [←int.to_nat_of_nonneg (Dim_pos h), int.coe_nat_inj'],
+  apply Dim_eq_min' U h n
+end
 
 end faces
  
