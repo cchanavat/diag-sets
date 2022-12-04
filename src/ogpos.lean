@@ -70,7 +70,13 @@ begin
   ext, unfold cl, simp
 end
 
-lemma mem_is_cl_of_below {U : set P} [is_closed U] {x y : P} (hy : y ∈ U) (hle : x ≤ y) : x ∈ U :=
+lemma mem_is_cl_of_lt {U : set P} [is_closed U] {x y : P} (hy : y ∈ U) (hle : x < y) : x ∈ U :=
+begin
+  rw ←closed_eq_closure U at *,
+  apply mem_cl_of_below hy x (le_of_lt hle) 
+end
+
+lemma mem_is_cl_of_le {U : set P} [is_closed U] {x y : P} (hy : y ∈ U) (hle : x ≤ y) : x ∈ U :=
 begin
   rw ←closed_eq_closure U at *,
   apply mem_cl_of_below hy x hle
@@ -162,7 +168,7 @@ begin
   cases hle,
   { cases exists_right_cov_of_lt hle with w hw,
     exfalso,
-    apply hmax.right (mem_is_cl_of_below hy hw.right) hw.left },
+    apply hmax.right (mem_is_cl_of_le hy hw.right) hw.left },
   { assumption }
 end
 
@@ -174,6 +180,14 @@ begin
   exact hx.left
 end
 
+-- lemma Max_inter (U V : set P) : Max (U ∩ V) = Max U ∩ Max V :=
+-- begin
+--   apply subset_antisymm; intros x hx,
+--   { split, 
+--     { apply and.intro hx.left.left, intros u hu hcov, cases hx, },
+
+--   } 
+-- end
 -- In this namespace, some auxialiary lemmas to prove Lemma 1.1.8
 namespace maximal
 
@@ -429,6 +443,9 @@ def grading (n : ℤ) : set P := { x ∈ U | dim x = n }
 begin
   unfold grading, simp [hx],
 end
+
+lemma grading_monotonic {U V : set P} (h : U ⊆ V) (n : ℤ) : grading U n ⊆ grading V n :=
+λ x hx, and.intro (h hx.left) hx.right
 
 lemma grading_empty_of_dim_le_zero (n : ℤ) (hle : ¬ (0 ≤ n)) : grading U n = ∅ :=
 begin
@@ -1140,7 +1157,7 @@ begin
           have hmax := hx.left,
           erw mem_set_of at hmax,
           apply hmax.right _ hcov,
-          apply mem_is_cl_of_below _ hle, exact _inst_1,
+          apply mem_is_cl_of_le _ hle, exact _inst_1,
           apply sΔ_subset hy },
         { rw mem_Union at hu,
           cases hu with i hu,
@@ -1148,7 +1165,7 @@ begin
           cases hy with hy hle,
           cases hx.left,
           apply right _ hcov,
-          apply mem_is_cl_of_below _ hle, exact _inst_1,
+          apply mem_is_cl_of_le _ hle, exact _inst_1,
           apply Max_subset _ hy.left } } } },
   { erw grading_empty_of_dim_le_zero _ _ h,
     erw grading_empty_of_dim_le_zero _ _ h }
@@ -1328,6 +1345,112 @@ begin
   rw [←int.to_nat_of_nonneg (Dim_pos h), int.coe_nat_inj'],
   apply Dim_eq_min' U h n
 end
+
+
+-- Lemma 1.2.14 -- point 1 -- note : the union is not disjoint here 
+lemma Max_union (U V : set P) [is_closed U] [is_closed V] : 
+  Max (U ∪ V) = (Max U ∩ Max V) ∪ (Max U) \ V ∪ (Max V) \ U :=
+begin
+  apply subset_antisymm; intros x hx,
+  by_cases hU : x ∈ U, 
+  { by_cases hV : x ∈ V,
+    { left, left, split, 
+      { apply and.intro hU, intros u hu hcov, apply hx.right (mem_union_left _ hu) hcov },
+      { apply and.intro hV, intros u hu hcov, apply hx.right (mem_union_right _ hu) hcov } },
+    { left, right, 
+      rw mem_diff, apply and.intro _ hV, 
+      apply and.intro hU, intros u hu hcov,
+      apply hx.right (mem_union_left _ hu) hcov } },
+  { by_cases hV : x ∈ V,
+    { right,
+      rw mem_diff, apply and.intro _ hU, 
+      apply and.intro hV, intros u hu hcov,
+      apply hx.right (mem_union_right _ hu) hcov },
+    { exfalso, cases hx, rw mem_union at hx_left, 
+      cases hx_left,
+      exact hU hx_left, 
+      exact hV hx_left } },
+  cases hx, 
+  { cases hx; apply and.intro (mem_union_left _ hx.left.left);
+    intros u hu hcov; cases hu,
+    { apply hx.left.right hu hcov },
+    { apply hx.right.right hu hcov },
+    { rw mem_diff at hx,
+      apply hx.left.right hu hcov },
+    { rw mem_diff at hx,
+      apply hx.right,
+      apply mem_is_cl_of_lt hu (covby.lt hcov) } },
+  { apply and.intro (mem_union_right _ hx.left.left),
+    intros u hu hcov, cases hu,
+    { rw mem_diff at hx,
+      apply hx.right,
+      apply mem_is_cl_of_lt hu (covby.lt hcov) },
+    { rw mem_diff at hx,
+      apply hx.left.right hu hcov } },
+end
+
+-- Lemma 1.2.14 -- point 2 -- note : the union is not disjoint here 
+lemma sΔ_union (U V : set P) [is_closed U] [is_closed V] (n : ℤ) (α : bool) : 
+    sΔ α n (U ∪ V) = (sΔ α n U ∩ sΔ α n V) ∪ (sΔ α n U) \ V ∪ (sΔ α n V) \ U :=
+begin
+  by_cases hn : 0 ≤ n,
+  { rw [sΔ_eq_sΔ' hn, sΔ_eq_sΔ' hn, sΔ_eq_sΔ' hn], 
+    apply subset_antisymm; intros x hx,
+    by_cases hU : x ∈ U, 
+    { by_cases hV : x ∈ V,
+      { left, left, split,
+        { apply and.intro (and.intro hU hx.left.right), 
+          simp only, rw eq_empty_iff_forall_not_mem, intros e he,
+          cases hx, rw eq_empty_iff_forall_not_mem at hx_right,
+          apply hx_right e, rw inter_distrib_left, left, exact he },
+        { apply and.intro (and.intro hV hx.left.right), 
+          simp only, rw eq_empty_iff_forall_not_mem, intros e he,
+          cases hx, rw eq_empty_iff_forall_not_mem at hx_right,
+          apply hx_right e, rw inter_distrib_left, right, exact he } }, 
+      { left, right, rw mem_diff, apply and.intro _ hV,
+        { apply and.intro (and.intro hU hx.left.right), 
+          simp only, rw eq_empty_iff_forall_not_mem, intros e he,
+          cases hx, rw eq_empty_iff_forall_not_mem at hx_right,
+          apply hx_right e, rw inter_distrib_left, left, exact he } } },
+    { by_cases hV : x ∈ V,
+      { right, rw mem_diff, apply and.intro _ hU,
+        { apply and.intro (and.intro hV hx.left.right), 
+          simp only, rw eq_empty_iff_forall_not_mem, intros e he,
+          cases hx, rw eq_empty_iff_forall_not_mem at hx_right,
+          apply hx_right e, rw inter_distrib_left, right, exact he } },
+      { exfalso, cases hx, erw mem_sep_iff at hx_left, 
+        cases hx_left.left,
+        exact hU h, 
+        exact hV h } },
+    cases hx,
+    { cases hx; apply and.intro (grading_monotonic (subset_union_left _ _) _ hx.left.left);
+      simp only; rw inter_distrib_left; rw union_empty_iff, 
+      { apply and.intro hx.left.right hx.right.right },
+      { rw mem_diff at hx, 
+        apply and.intro hx.left.right,
+        rw eq_empty_iff_forall_not_mem, 
+        intros u hu,
+        cases hu, 
+        apply hx.right,
+        erw mem_set_of at hu_left,
+        cases hu_left with hcov _,
+        apply mem_is_cl_of_lt hu_right (covby.lt hcov) } },
+    { apply and.intro (grading_monotonic (subset_union_right _ _) _ hx.left.left), 
+      simp only, rw inter_distrib_left; rw union_empty_iff, 
+      rw mem_diff at hx, 
+      refine and.intro _ hx.left.right,
+      rw eq_empty_iff_forall_not_mem, 
+      intros u hu,
+      cases hu, 
+      apply hx.right,
+      erw mem_set_of at hu_left,
+      cases hu_left with hcov _,
+      apply mem_is_cl_of_lt hu_right (covby.lt hcov) } },
+  { unfold sΔ, rw [dif_neg hn, dif_neg hn, dif_neg hn], 
+    rw [empty_inter, empty_union, empty_diff, empty_diff, empty_union] }
+end
+
+-- The previous two lemmas could be factored by a LOT
 
 end faces
  
