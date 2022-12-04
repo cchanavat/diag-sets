@@ -961,6 +961,10 @@ cl (sΔ α n U) ∪ ⋃ (k : { k // k < n}), cl (grading (Max U) k)
 def δ (α : bool) (n : ℤ) (U : set P) : set P :=
 dite (0 ≤ n) (λ (h : 0 ≤ n), δ' α n U) (λ _, ∅)
 
+def sδ (α : bool) (n : ℤ) (x : P) := δ α n (cl ({x} : set P))
+
+lemma sδ_def {α : bool} {n : ℤ} {x : P} : sδ α n x = δ α n (cl ({x} : set P)) := rfl
+
 lemma δ_eq_δ' {α : bool} {n : ℤ} {U : set P} (hn : 0 ≤ n) : δ α n U = δ' α n U :=
 begin
   unfold δ,
@@ -1339,7 +1343,7 @@ begin
 end
 
 -- Corollary 1.2.13
-lemma Dim_eq_min [is_closed U] (h : U.nonempty) (n : ℕ) :
+lemma Dim_eq_min [is_closed U] (h : U.none\mpty) (n : ℕ) :
   Dim U = @Inf ℕ _ {n : ℕ | ∀ α, δ α n U = U} :=
 begin
   rw [←int.to_nat_of_nonneg (Dim_pos h), int.coe_nat_inj'],
@@ -1490,3 +1494,15 @@ end
 
 end faces
  
+namespace maps
+
+open faces 
+
+-- 1.3.1
+structure map (P Q : ogpos) :=
+(app : P → Q)
+(comm : ∀ (x : P) (n : ℤ) (α : bool),  app '' (sδ α n x) = sδ α n (app x))
+
+instance map_to_fun (P Q : ogpos) : has_coe_to_fun (map P Q) (λ _, P → Q) := ⟨λ m, m.app⟩
+
+end maps
