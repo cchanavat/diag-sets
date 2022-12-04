@@ -89,14 +89,14 @@ lemma closure_nonempty {U : set P} (hnempty : U.nonempty) : (cl U).nonempty :=
 nonempty.mono (subset_cl U) hnempty
 
 -- Lemma 1.1.5 - part 1
-lemma closure_monotonic (U V : set P) (hsub : U ⊆ V) : cl U ⊆ cl V :=
+lemma closure_monotonic {U V : set P} (hsub : U ⊆ V) : cl U ⊆ cl V :=
 λ x ⟨u, ⟨hu, hle⟩⟩, ⟨u, ⟨hsub hu, hle⟩⟩
 
 -- Lemma 1.1.5 - part 2
 lemma closure_sub {U V: set P} [is_closed V] (hsub : U ⊆ V) : cl U ⊆ V :=
 begin
   rw ←closed_eq_closure V,
-  exact closure_monotonic _ _ hsub,
+  exact closure_monotonic hsub,
 end
 
 lemma closure_indempotent (U : set P) : cl (cl U) = cl U :=
@@ -1346,6 +1346,7 @@ begin
   apply Dim_eq_min' U h n
 end
 
+-- The next three lemmas can be factored by a LOT
 
 -- Lemma 1.2.14 -- point 1 -- note : the union is not disjoint here 
 lemma Max_union (U V : set P) [is_closed U] [is_closed V] : 
@@ -1450,7 +1451,42 @@ begin
     rw [empty_inter, empty_union, empty_diff, empty_diff, empty_union] }
 end
 
--- The previous two lemmas could be factored by a LOT
+-- Corollary 1.2.15
+lemma δ_sub_distrib (U V : set P) [is_closed U] [is_closed V] (n : ℤ) (α : bool) :
+  δ α n (U ∪ V) ⊆  δ α n U ∪  δ α n V :=
+begin
+  by_cases h : 0 ≤ n,
+  { rw [δ_eq_δ' h, δ_eq_δ' h, δ_eq_δ' h], 
+    intros x hx,
+    cases hx,
+    { rw [sΔ_union, closure_union_eq_union_closure, closure_union_eq_union_closure] at hx,
+      cases hx,
+      { cases hx,
+        left, left,
+        apply closure_monotonic (inter_subset_left _ _) hx,
+        left, left,
+        refine closure_monotonic _ hx,
+        apply diff_subset },
+      { right, left, 
+        refine closure_monotonic _ hx,
+        apply diff_subset } },
+    { rw mem_Union at hx, cases hx with k hk,
+      cases hk with w hw,
+      cases hw with hw hle,
+      have hw' := hw,
+      cases hw, rw Max_union at hw_left,
+      cases hw_left,
+      { cases hw_left;
+        { left, right, rw mem_Union, use k,
+          refine mem_cl_of_below _ _ hle, 
+          apply subset_cl _,
+          apply and.intro hw_left.left hw_right } },
+      { right, right, rw mem_Union, use k,
+          refine mem_cl_of_below _ _ hle, 
+          apply subset_cl _,
+          apply and.intro hw_left.left hw_right } } },
+  { unfold δ, erw dif_neg h, apply empty_subset }
+end
 
 end faces
  
