@@ -367,6 +367,17 @@ end
 
 def max_path (x : P) :=  @is_graded.max_path _ _ (graded.all_graded x)
 
+-- WE NEED THE PATH COMPLETION :'( TODO
+lemma path_lenght_le_max_path_lenght {x y : P} (p : path x y) : 
+  p.length ≤ (max_path x).path.length :=
+begin
+  by_cases h : is_normal y,
+  { apply le_of_eq,
+    let pmax := maximal_path.mk y h p,
+    change p.length with pmax.path.length,
+    apply same_length },
+  { sorry }
+end
 -- 1.1.10 (Dimension of an element)
 def dim (x : P) : ℤ := (max_path x).path.length
 
@@ -1597,8 +1608,15 @@ begin
   apply and.intro hle (eq.refl _)
 end
 
+lemma mem_image_of_le_image {x : P} {y : Q} (hxy : y ≤ f x) : ∃ x', y = f x' :=
+begin
+  rw [←mem_cl_singleton_iff_below, cl_map_eq_map_cl, mem_image] at hxy,
+  cases hxy with w hw,
+  use w, symmetry, exact hw.right
+end
+
 -- Lemma 1.3.2 -- point 3
-lemma dim_f_le_dim (x : P) : dim (f x) ≤ dim x :=
+lemma dim_map_le_dim (x : P) : dim (f x) ≤ dim x :=
 begin
   have k : (dim x).to_nat ∈ {n : ℕ | ∀ α, δ α n (cl ({f x} : set Q)) = (cl {f x})} :=
   begin
@@ -1614,6 +1632,76 @@ begin
   rw ←Dim_cl_singleton,
   apply Dim_eq_min,
   use f x, rw mem_cl_singleton_iff_below
+end
+
+-- 1.3.3 -- inclusion of ogpos
+structure ι_map (P Q : ogpos) extends map P Q :=
+(inj : function.injective app)
+
+instance ι_map_to_fun (P Q : ogpos) : has_coe_to_fun (ι_map P Q) (λ _, P → Q) := ⟨λ m, m.app⟩
+
+variables {i : ι_map P Q} (x : P)
+
+-- Lemma 1.3.4 -- point 1
+lemma ι_map_reflects {x y : P} (hle : i x ≤ i y) : x ≤ y :=
+begin
+  erw [←mem_cl_singleton_iff_below, cl_map_eq_map_cl, mem_image] at hle,
+  cases hle with w hw,
+  rw [←mem_cl_singleton_iff_below, ←i.inj (hw.right)],
+  exact hw.left
+end
+
+lemma ι_map_st_reflects {x y : P} (hle : i x < i y) : x < y :=
+begin
+  rw lt_iff_le_and_ne,
+  apply and.intro (ι_map_reflects (le_of_lt hle)),
+  intro h, 
+  rw h at hle,
+  apply lt_irrefl (i y) hle
+end
+
+lemma ι_map_st_monotonic {x y : P} (hlt : x < y) : i x < i y :=
+begin
+  rw lt_iff_le_and_ne,
+  apply and.intro (map_monotonic _ (le_of_lt hlt)),
+  intro heq,
+  apply ne_of_lt hlt,
+  apply i.inj heq
+end
+
+lemma ι_map_preserves_cov {x y : P} (hcov : x ⋖ y) : i x ⋖ i y :=
+begin
+  apply covby_of_eq (ι_map_st_monotonic (covby.lt hcov)),
+  intros z' hx hy,
+  cases mem_image_of_le_image i.to_map hy,
+  rw h,
+  congr,
+  apply eq_of_between_cov hcov,
+  { rw h at hx, exact ι_map_st_reflects hx },
+  { rw h at hy, exact ι_map_reflects hy }
+end
+
+-- ι_maps are prefunctors between the Hasses's diagrams
+def ι_map.to_prefunctor (i : ι_map P Q) : prefunctor P Q :=
+{ obj := λ x, i x,
+  map := λ x y hcov, ι_map_preserves_cov hcov }
+
+lemma ι_map_path_length (i : ι_map P Q) {x y : P} (p : path x y) : 
+  (i.to_prefunctor.map_path p).length = p.length :=
+begin
+  induction p with z _ p q h,
+  { rw [path.length_nil, prefunctor.map_path_nil, path.length_nil] },
+  { rw [path.length_cons, prefunctor.map_path_cons, path.length_cons, h] }
+end
+
+-- Lemma 1.3.4 -- point 2
+lemma ι_map_preserves_dim (x : P) : dim (i x) = dim x :=
+begin
+  apply le_antisymm (dim_map_le_dim i.to_map x), 
+  unfold dim,
+  rw ←ι_map_path_length i,
+  rw int.coe_nat_le_coe_nat_iff,
+  apply path_lenght_le_max_path_lenght
 end
 
 end maps

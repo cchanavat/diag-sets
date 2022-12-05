@@ -16,6 +16,26 @@ open quiver
 
 variable {P : FinPartialOrder}
 
+lemma eq_of_between_cov {x y z : P} (hcov : x ⋖ y) (hlt : x < z) (hle : z ≤ y) : z = y :=
+begin
+  cases covby.eq_or_eq hcov (le_of_lt hlt) (hle),
+  { rw h at hlt, 
+    exfalso,
+    apply lt_irrefl x hlt },
+  { exact h } 
+end
+
+lemma covby_of_eq {x y : P} (hlt : x < y) (h : ∀ z, x < z → z ≤ y → z = y) : x ⋖ y :=
+begin
+  apply covby_of_eq_or_eq hlt,
+  intros z hx hy,
+  rw le_iff_lt_or_eq at hx,
+  cases hx,
+  { right,
+    apply h z hx hy },
+  { left, exact hx.symm }
+end
+
 instance subsingleton_hom_set (x y : P) : subsingleton (x ⟶ y) :=
 begin
   apply subsingleton.intro, intros e e',
