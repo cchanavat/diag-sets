@@ -140,6 +140,9 @@ begin
     exact ⟨i, hin⟩ }
 end 
 
+lemma closure_Union_eq_Union_closure₂ (ι : Sort*) (κ : ι → Sort*) (s : Π i, κ i → set P) : 
+  cl (⋃ i j, s i j) = ⋃ i j, cl (s i j) := by simp_rw closure_Union_eq_Union_closure
+
 -- It is basically easier to redo the proof that to use the previous one
 lemma closure_union_eq_union_closure (U V : set P) : cl (U ∪ V) = cl U ∪ cl V :=
 begin
@@ -155,6 +158,20 @@ begin
     refine and.intro _ hle, 
     { left, exact hy },
     { right, exact hy } }
+end
+
+lemma is_closed_eq_union_closure_singleton (U : set P) [is_closed U] : (⋃ x ∈ U, cl {x}) = U :=
+begin
+  apply subset_antisymm; intros x hx,
+  { rw mem_Union at hx,  
+    cases hx with w hw,
+    rw mem_Union at hw,
+    cases hw with hw hcl,
+    rw mem_cl_singleton_iff_below at hcl,
+    apply mem_is_cl_of_le hw hcl },
+  { rw mem_Union, use x, 
+    rw mem_Union, use hx,
+    rw mem_cl_singleton_iff_below }
 end
 
 variable (U : set P)
@@ -711,6 +728,16 @@ begin
     apply Dim_ge_minus_one }
 end
 
+lemma Dim_le {U : set P} (x : P) (hx : x ∈ U) : dim x ≤ Dim U := 
+begin
+  by_cases h : U.nonempty,
+  { unfold Dim, erw dif_pos h, apply finset.le_max',
+    apply dim_set_complete U x hx },
+  { exfalso, 
+    apply h,
+    apply nonempty_of_mem hx }
+end
+
 lemma Dim_pos {U : set P} (h : U.nonempty) : 0 ≤ Dim U := 
 begin
   unfold Dim,
@@ -732,6 +759,15 @@ begin
   erw dif_neg he at h,
   linarith
 end
+
+lemma empty_of_Dim_neg (U : set P) (hDim : Dim U < 0) : U = ∅ :=
+begin
+  apply eq_empty_of_forall_not_mem,
+  intros x hx,
+  have hpos := Dim_pos (nonempty_of_mem hx),
+  linarith
+end
+
 -- To work directly in ℤ with non empty sets
 noncomputable
 def Dim' {U : set P} (hnempty : U.nonempty) : ℤ := 
@@ -759,6 +795,7 @@ begin
     apply hU,
     apply nonempty_of_mem hx.left }
 end
+
 
 lemma eq_Union_grading_bounded : (⋃ k : {k // k ≤ Dim U}, grading U k) = U :=
 begin
@@ -1278,6 +1315,7 @@ begin
   { unfold δ, rw dif_neg h, apply empty_subset }
 end
 
+-- Lemma 1.2.12 -- point 2
 lemma δ_eq_iff_Dim_le_n (α : bool) (n : ℕ) (U : set P) [is_closed U] : δ α n U = U ↔ Dim U ≤ n :=
 begin
   split,
@@ -1317,6 +1355,20 @@ begin
         { exact hk } } } }
 end
 
+-- Intersting variant where we can have n arbitrary int (converse is false I beleive)
+lemma δ_eq_of_Dim_le_n (α : bool) (n : ℤ) (U : set P) [is_closed U] (hle : Dim U ≤ n) : 
+  δ α n U = U := 
+begin
+  by_cases h : 0 ≤ n,
+  { rw [←int.to_nat_of_nonneg h, δ_eq_iff_Dim_le_n, 
+         int.to_nat_of_nonneg h],
+    exact hle },
+  { unfold δ, erw dif_neg h, symmetry, 
+    apply empty_of_Dim_neg,
+    rw not_le at h,
+    exact has_le.le.trans_lt hle h }
+end
+
 -- Auxiliary lemma for next Corollary
 lemma Dim_mem_Dim_eq_min_nonempty [is_closed U] (h : U.nonempty) : 
   (Dim U).to_nat ∈ {n : ℕ | ∀ α, δ α n U = U} :=
@@ -1326,7 +1378,7 @@ begin
   rw [δ_eq_iff_Dim_le_n, int.to_nat_of_nonneg (Dim_pos h)] 
 end
 
-lemma Dim_eq_min' [is_closed U] (h : U.nonempty) (n : ℕ) : 
+lemma Dim_eq_min' [is_closed U] (h : U.nonempty) : 
   (Dim U).to_nat = @Inf ℕ _ {n : ℕ | ∀ α, δ α n U = U} :=
 begin
   apply linarith.eq_of_not_lt_of_not_gt; intro hlt,
@@ -1343,11 +1395,11 @@ begin
 end
 
 -- Corollary 1.2.13
-lemma Dim_eq_min [is_closed U] (h : U.nonempty) (n : ℕ) :
+lemma Dim_eq_min [is_closed U] (h : U.nonempty) :
   Dim U = @Inf ℕ _ {n : ℕ | ∀ α, δ α n U = U} :=
 begin
   rw [←int.to_nat_of_nonneg (Dim_pos h), int.coe_nat_inj'],
-  apply Dim_eq_min' U h n
+  apply Dim_eq_min' U h
 end
 
 -- The next three lemmas can be factored by a LOT
@@ -1503,6 +1555,65 @@ structure map (P Q : ogpos) :=
 (app : P → Q)
 (comm : ∀ (x : P) (n : ℤ) (α : bool),  app '' (sδ α n x) = sδ α n (app x))
 
+lemma map.comm' {P Q : ogpos} (f : map P Q) : 
+  ∀ (x : P) (n : ℤ) (α : bool),  f.app '' (δ α n (cl {x})) = δ α n (cl {f.app x}) := f.comm
+
 instance map_to_fun (P Q : ogpos) : has_coe_to_fun (map P Q) (λ _, P → Q) := ⟨λ m, m.app⟩
+
+variables {P Q : ogpos} (f : map P Q)
+
+lemma cl_map_eq_map_cl (x : P) : cl { f x } = f '' (cl {x}) :=
+begin
+  let m := max (Dim (cl {f x})) (Dim (cl {x})),
+  rw ←@δ_eq_of_Dim_le_n Q tt m (cl {f x}) _ (le_max_left _ _),  
+  erw ←f.comm', 
+  rw @δ_eq_of_Dim_le_n P tt m (cl {x}) _ (le_max_right _ _), 
+  refl, 
+end
+
+-- Lemma 1.3.2 -- point 1
+instance image_closed (U : set P) [is_closed U] : is_closed (f '' U) :=
+{ is_eq_cl := 
+  begin
+    refine subset_antisymm _ (subset_cl _),
+    nth_rewrite 0 ←is_closed_eq_union_closure_singleton U,
+    rw [image_Union₂, closure_Union_eq_Union_closure₂],
+    intros x hx, rw mem_Union₂ at hx, 
+    cases hx with w hw, cases hw with hw hin,
+    rw [←cl_map_eq_map_cl, closure_indempotent] at hin,
+    rw [←is_closed_eq_union_closure_singleton U, image_Union₂],
+    rw mem_Union₂,
+    use w,
+    rw ←cl_map_eq_map_cl,
+    apply and.intro hw hin
+  end }
+
+-- Lemma 1.3.2 -- point 2
+lemma map_monotonic {x y : P} (hle : x ≤ y) : f x ≤ f y :=
+begin
+  rw [←mem_cl_singleton_iff_below (f y), cl_map_eq_map_cl, mem_image],
+  use x,
+  rw mem_cl_singleton_iff_below,
+  apply and.intro hle (eq.refl _)
+end
+
+-- Lemma 1.3.2 -- point 3
+lemma dim_f_le_dim (x : P) : dim (f x) ≤ dim x :=
+begin
+  have k : (dim x).to_nat ∈ {n : ℕ | ∀ α, δ α n (cl ({f x} : set Q)) = (cl {f x})} :=
+  begin
+    rw mem_set_of, intro α,
+    erw ←f.comm',
+    rw [int.to_nat_of_nonneg (dim_pos _),δ_eq_of_Dim_le_n _ _ _(le_of_eq (Dim_cl_singleton x))],
+    rw cl_map_eq_map_cl,
+    refl
+  end,
+  have hInf := nat.Inf_le k,
+  rw [←int.coe_nat_le, int.to_nat_of_nonneg (dim_pos x)] at hInf,
+  convert hInf,
+  rw ←Dim_cl_singleton,
+  apply Dim_eq_min,
+  use f x, rw mem_cl_singleton_iff_below
+end
 
 end maps
