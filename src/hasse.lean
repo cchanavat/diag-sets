@@ -16,13 +16,19 @@ open quiver
 
 variable {P : FinPartialOrder}
 
-lemma eq_of_between_cov {x y z : P} (hcov : x ⋖ y) (hlt : x < z) (hle : z ≤ y) : z = y :=
+lemma eq_of_between_cov_right {x y z : P} (hcov : x ⋖ y) (hlt : x < z) (hle : z ≤ y) : z = y :=
 begin
   cases covby.eq_or_eq hcov (le_of_lt hlt) (hle),
   { rw h at hlt, 
     exfalso,
     apply lt_irrefl x hlt },
   { exact h } 
+end
+
+lemma eq_of_between_cov_left {x y z : P} (hcov : x ⋖ y) (hlt : z < y) (hle : x ≤ z) : x = z :=
+begin
+  by_contra' h,
+  apply hcov.right (lt_of_le_of_ne hle h) hlt 
 end
 
 lemma covby_of_eq {x y : P} (hlt : x < y) (h : ∀ z, x < z → z ≤ y → z = y) : x ⋖ y :=

@@ -367,17 +367,14 @@ end
 
 def max_path (x : P) :=  @is_graded.max_path _ _ (graded.all_graded x)
 
--- WE NEED THE PATH COMPLETION :'( TODO
-lemma path_lenght_le_max_path_lenght {x y : P} (p : path x y) : 
+lemma path_length_le_max_path_length {x y : P} (p : path x y) : 
   p.length ≤ (max_path x).path.length :=
 begin
-  by_cases h : is_normal y,
-  { apply le_of_eq,
-    let pmax := maximal_path.mk y h p,
-    change p.length with pmax.path.length,
-    apply same_length },
-  { sorry }
+  rw [←same_length x (maximal_path_concat p (max_path y)), maximal_path_concat.path],
+  rw [path.length_comp, le_add_iff_nonneg_right],
+  apply zero_le (max_path y).path.length
 end
+
 -- 1.1.10 (Dimension of an element)
 def dim (x : P) : ℤ := (max_path x).path.length
 
@@ -460,6 +457,12 @@ begin
     apply lt_irrefl (dim y),
     exact hdim' },
   { assumption }
+end
+
+lemma dim_minus_one_pos_of_cov {x y : P} (hcov : x ⋖ y) : 0 ≤ dim y - 1 :=
+begin
+  rw [←dim_plus_one_of_covby hcov, coe_is_one_hom.coe_one, add_tsub_cancel_right],
+  apply dim_pos x
 end
 
 variables (U) 
@@ -1669,14 +1672,16 @@ begin
   apply i.inj heq
 end
 
-lemma ι_map_preserves_cov {x y : P} (hcov : x ⋖ y) : i x ⋖ i y :=
+
+-- Lemma 1.3.4 -- point 3 (cover)
+lemma ι_map.cov (i : ι_map P Q) {x y : P} (e : x ⋖ y) : i x ⋖ i y :=
 begin
-  apply covby_of_eq (ι_map_st_monotonic (covby.lt hcov)),
+  apply covby_of_eq (ι_map_st_monotonic (covby.lt e)),
   intros z' hx hy,
   cases mem_image_of_le_image i.to_map hy,
   rw h,
   congr,
-  apply eq_of_between_cov hcov,
+  apply eq_of_between_cov_right e,
   { rw h at hx, exact ι_map_st_reflects hx },
   { rw h at hy, exact ι_map_reflects hy }
 end
@@ -1684,7 +1689,7 @@ end
 -- ι_maps are prefunctors between the Hasses's diagrams
 def ι_map.to_prefunctor (i : ι_map P Q) : prefunctor P Q :=
 { obj := λ x, i x,
-  map := λ x y hcov, ι_map_preserves_cov hcov }
+  map := λ x y hcov, i.cov hcov }
 
 lemma ι_map_path_length (i : ι_map P Q) {x y : P} (p : path x y) : 
   (i.to_prefunctor.map_path p).length = p.length :=
@@ -1695,13 +1700,77 @@ begin
 end
 
 -- Lemma 1.3.4 -- point 2
-lemma ι_map_preserves_dim (x : P) : dim (i x) = dim x :=
+lemma ι_map_preserves_dim (i : ι_map P Q) (x : P) : dim (i x) = dim x :=
 begin
   apply le_antisymm (dim_map_le_dim i.to_map x), 
   unfold dim,
   rw ←ι_map_path_length i,
   rw int.coe_nat_le_coe_nat_iff,
-  apply path_lenght_le_max_path_lenght
+  apply path_length_le_max_path_length
+end
+
+lemma mem_sδ_of_cov {x y : P} (e : x ⋖ y) {α : bool} (hε : P.ε e = α) : x ∈ sδ α (dim y - 1) y :=
+begin
+  unfold sδ δ,
+  erw dif_pos (dim_minus_one_pos_of_cov e),
+  left,
+  apply subset_cl _,
+  rw sΔ_eq_sΔ' (dim_minus_one_pos_of_cov e),
+  apply and.intro,
+  { erw mem_set_of,
+    rw mem_cl_singleton_iff_below,
+    apply and.intro e.le,
+    rw [←dim_plus_one_of_covby e, coe_is_one_hom.coe_one, add_tsub_cancel_right] },
+  { simp only, rw eq_empty_iff_forall_not_mem,
+    intros w hw,
+    cases hw.left with e' he',
+    have hwy : w = y :=
+    begin
+      cases covby.eq_or_eq e e'.le _,
+      { exfalso, rw h at e',
+        apply e'.ne', refl },
+      { assumption },
+      { rw ←mem_cl_singleton_iff_below,
+        exact hw.right }
+    end,
+    rw hwy at e',
+    apply bool.bnot_ne_self α,
+    rw [←he', ←hε],
+    congr, rw hwy }
+end 
+
+-- Lemma 1.3.4 -- point 3 (orientation)
+lemma ι_map_preserves_orientation {x y : P} (e : x ⋖ y) {α : bool} (hε : P.ε e = α) : 
+  Q.ε (i.cov e) = α :=
+begin
+  have hi := mem_image_of_mem i (mem_sδ_of_cov e hε),
+  erw i.comm at hi,
+  unfold sδ δ at hi,
+  erw dif_pos (dim_minus_one_pos_of_cov e) at hi,
+  cases hi, 
+  { rw ←ι_map_preserves_dim i at hi,
+    erw [←Δ_eq_sΔ_cl_singleton, mem_set_of] at hi,
+    cases hi with w hw,
+    cases hw with hw hle,
+    cases hw with e' he',
+    rw ←he', congr,
+    apply eq_of_between_cov_left (i.cov e) e'.lt hle },
+  { exfalso, 
+    rw mem_Union at hi,
+    cases hi with k hx,
+    erw mem_set_of at hx,
+    cases hx with w hw,
+    cases hw with hw hg,
+    erw mem_set_of at hw,
+    cases hw,
+    clear hw_left hε,
+    have hk := k.prop,
+    erw ←hw_right at hk,
+    rw ←(dim_plus_one_of_covby e) at hk,
+    simp at hk,
+    apply not_le_of_lt hk,
+    rw ←ι_map_preserves_dim i,
+    exact dim_monotonic hg }
 end
 
 end maps
