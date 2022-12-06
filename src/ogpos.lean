@@ -1643,7 +1643,12 @@ structure ι_map (P Q : ogpos) extends map P Q :=
 
 instance ι_map_to_fun (P Q : ogpos) : has_coe_to_fun (ι_map P Q) (λ _, P → Q) := ⟨λ m, m.app⟩
 
+instance ι_image_closed (i : ι_map P Q) (U : set P) [is_closed U] : 
+  is_closed (i '' U) := maps.image_closed i.to_map U
+
 variables {i : ι_map P Q} (x : P)
+
+
 
 -- Lemma 1.3.4 -- point 1
 lemma ι_map_reflects {x y : P} (hle : i x ≤ i y) : x ≤ y :=
@@ -1663,6 +1668,15 @@ begin
   apply lt_irrefl (i y) hle
 end
 
+def ι_map.to_o (i : ι_map P Q) : P ↪o Q :=
+{ to_fun := i,
+  inj' := i.inj,
+  map_rel_iff' := λ x y, iff.intro (ι_map_reflects) (λ h, map_monotonic _ h) }
+
+lemma ι_map.cov_inv (i : ι_map P Q) {x y : P} (hcov : i x ⋖ i y) : x ⋖ y :=
+covby.of_image i.to_o hcov
+
+
 lemma ι_map_st_monotonic {x y : P} (hlt : x < y) : i x < i y :=
 begin
   rw lt_iff_le_and_ne,
@@ -1671,7 +1685,6 @@ begin
   apply ne_of_lt hlt,
   apply i.inj heq
 end
-
 
 -- Lemma 1.3.4 -- point 3 (cover)
 lemma ι_map.cov (i : ι_map P Q) {x y : P} (e : x ⋖ y) : i x ⋖ i y :=
@@ -1740,7 +1753,7 @@ begin
 end 
 
 -- Lemma 1.3.4 -- point 3 (orientation)
-lemma ι_map_preserves_orientation {x y : P} (e : x ⋖ y) {α : bool} (hε : P.ε e = α) : 
+lemma ι_map_preserves_orientation (i : ι_map P Q) {x y : P} (e : x ⋖ y) {α : bool} (hε : P.ε e = α) : 
   Q.ε (i.cov e) = α :=
 begin
   have hi := mem_image_of_mem i (mem_sδ_of_cov e hε),
@@ -1772,5 +1785,235 @@ begin
     rw ←ι_map_preserves_dim i,
     exact dim_monotonic hg }
 end
+
+-- Next are (also useful for later?) auxiliary lemmas to prove the isomorphism of corollary 1.3.5
+variable (i)
+
+lemma ι_map_mem_cl (U : set P) (x : P) : i x ∈ cl (i '' U) ↔ x ∈ cl U :=
+begin
+  split; intro hx,
+  { cases hx with w hw,
+    cases hw with hw hle,
+    rw mem_image at hw,
+    cases hw with x' hx',
+    use x',
+    apply and.intro hx'.left, rw ←hx'.right at hle,
+    apply ι_map_reflects hle },
+  { cases hx with w hw, cases hw with hw hle,
+    use i w,
+    erw function.injective.mem_set_image i.inj,
+    apply and.intro hw (map_monotonic i.to_map hle) }
+end
+
+lemma ι_map_mem_sΔ_iff (U : set P) [is_closed U] (α : bool) (n : ℤ) : 
+  i x ∈ sΔ α n (i '' U) ↔ x ∈ sΔ α n U  :=
+begin
+  by_cases h : 0 ≤ n,
+  { symmetry,
+    rw [sΔ_eq_sΔ' h, sΔ_eq_sΔ' h], 
+    split; intro hx,
+    { split,
+      { split, 
+        use x,
+        apply and.intro (hx.left.left) (eq.refl _),
+        simp only, rw ι_map_preserves_dim,
+        exact hx.left.right },
+      { simp only,
+        rw eq_empty_iff_forall_not_mem, intros y hy,
+        cases hy,
+        rw mem_image at hy_right,
+        cases hy_right with x' hx',
+        erw [←hx'.right, mem_set_of] at hy_left,
+        cases hy_left with e he,
+        have hempty := hx.right,
+        erw eq_empty_iff_forall_not_mem at hempty,
+        apply hempty x',
+        apply and.intro _ hx'.left,
+        erw mem_set_of,
+        use  i.cov_inv e,
+        by_contra, simp at h,
+        apply bool.bnot_ne_self α,
+        have hcontr := ι_map_preserves_orientation i (i.cov_inv e) h,
+        rw he at hcontr,
+        exact hcontr } },
+      split,
+      { erw [mem_set_of, mem_set_of, function.injective.mem_set_image i.inj] at hx,
+        apply and.intro hx.left.left,
+        simp only, rw ←(ι_map_preserves_dim i x),
+        exact hx.left.right },
+      { simp only, rw eq_empty_iff_forall_not_mem, intros w hw,
+        cases hx,
+        erw [mem_sep_iff, mem_set_of] at hw,
+        cases hw.left with e he,
+        rw eq_empty_iff_forall_not_mem at hx_right,
+        apply hx_right (i w),
+        refine and.intro _ (mem_image_of_mem _ hw.right),
+        use i.cov e,
+        apply ι_map_preserves_orientation i e he } },
+  { unfold sΔ, 
+    rw [dif_neg h, dif_neg h, mem_empty_iff_false, mem_empty_iff_false] }
+end
+
+lemma ι_map_max_iff (U : set P) (x : P) : maximal (i '' U) (i x) ↔ maximal U x:=
+begin
+  split; intro hx; split,
+   { rw ←function.injective.mem_set_image i.inj,
+    exact hx.left },
+  { intros u hu hcov,
+    apply hx.right (mem_image_of_mem i hu) (i.cov hcov) },
+  { erw function.injective.mem_set_image i.inj,
+    exact hx.left },
+  { intros u hu hcov,
+    cases hu with w hw,
+    rw ←hw.right at hcov,
+    apply hx.right hw.left (i.cov_inv hcov) },
+end
+
+lemma ι_map_Max_iff (U : set P) (x : P) : i x ∈ Max (i '' U) ↔ x ∈ Max U  :=
+begin
+  erw [mem_set_of, mem_set_of],
+  exact ι_map_max_iff i U x
+end
+
+lemma ι_map_Max_eq (U : set P) : i '' Max U = Max (i '' U) :=
+begin
+  apply subset_antisymm; intros x hx,
+  { cases hx with w hw,
+    rw ←ι_map_Max_iff i at hw, rw ←hw.right,
+    exact hw.left },
+  { cases hx.left, 
+    use w, rw ←ι_map_Max_iff i, rw ←h.right at hx,
+    exact and.intro hx h.right }
+end
+
+lemma ι_map_cl_sΔ (U : set P) [is_closed U] (α : bool) (n : ℤ) (x : P) : 
+ i x ∈ cl (sΔ α n (i '' U)) ↔ x ∈ cl (sΔ α n U) :=
+begin
+  split; intros hx; cases hx with w hw; cases hw with hw hle,
+  { by_cases h : 0 ≤ n,
+    { rw sΔ_eq_sΔ' h at hw ⊢,
+      cases hw.left, rw mem_image at left,
+      cases left with y hy,
+      use y,
+      rw ←hy.right at hle,
+      refine and.intro _(ι_map_reflects hle),
+      rw [←hy.right, ι_map_preserves_dim] at right,
+      apply and.intro (and.intro hy.left right),
+      rw [←hy.right, ←sΔ_eq_sΔ' h, ι_map_mem_sΔ_iff i y, sΔ_eq_sΔ' h] at hw,
+      exact hw.right },
+    { unfold sΔ at *,
+      rw dif_neg h at hw,
+      exfalso,
+      apply not_mem_empty w hw } },
+  { use i w,
+    rw ι_map_mem_sΔ_iff i w,
+    apply and.intro hw (map_monotonic i.to_map hle) },
+end
+
+lemma ι_map_mem_grading (U : set P) (n : ℤ) (x : P) : i x ∈ grading (i '' U) n ↔ x ∈ grading U n :=
+begin
+  split; intro hx,
+  { apply and.intro ((function.injective.mem_set_image i.inj).elim_left hx.left), 
+    simp only, rw ←ι_map_preserves_dim i x,
+    exact hx.right },
+  { apply and.intro (mem_image_of_mem i hx.left), 
+    simp only, rw ι_map_preserves_dim,
+    exact hx.right}
+end
+
+-- Corollary 1.3.5 -- mem version (this only proves )
+lemma ι_map.iso_mem (U : set P) [is_closed U] (α : bool) (n : ℤ) (x : P) : 
+  i x ∈ δ α n (i '' U) ↔ x ∈ δ α n U :=
+begin
+  by_cases h : 0 ≤ n,
+  { rw [δ_eq_δ' h, δ_eq_δ' h], 
+    symmetry,
+    split; intro hx; cases hx,
+    { left, rw ι_map_cl_sΔ, exact hx },
+    { rw mem_Union at hx, cases hx with k hk,
+      right, rw mem_Union, use k,
+      cases hk with w hw, cases hw with hw hle,
+      use i w, refine and.intro _ (map_monotonic i.to_map hle),
+      rw [←ι_map_mem_grading i (Max U)] at hw,
+      refine and.intro _ hw.right,
+      rw ι_map_Max_iff,
+      rw ←function.injective.mem_set_image i.inj,
+      exact hw.left },
+    { left, rw ←ι_map_cl_sΔ i, exact hx },
+    { rw mem_Union at hx, cases hx with k hk,
+      right, rw mem_Union, use k,
+      cases hk with w hw, cases hw with hw hle,
+      cases hw.left.left with x' hx',
+      use x', rw ←hx'.right at hle hw,
+      refine and.intro _ (ι_map_reflects hle), 
+      rw [←ι_map_mem_grading i, ι_map_Max_eq],
+      exact hw } },
+  { unfold δ, rw [dif_neg h, dif_neg h, mem_empty_iff_false, mem_empty_iff_false] }
+end
+
+lemma ι_map_δ_sub (U : set P) [is_closed U] (α : bool) (n : ℤ) : i '' δ α n U ⊆ δ α n (i '' U) :=
+begin
+  intros y hy,
+  cases hy with x hx, 
+  rw i.iso_mem at hx,
+  rw ←hx.right,
+  exact hx.left
+end
+
+lemma ι_map_δ_sub' (U : set P) [is_closed U] (α : bool) (n : ℤ) : δ α n (i '' U) ⊆ i '' δ α n U :=
+begin
+  by_cases h : 0 ≤ n,
+  { rw [δ_eq_δ' h, δ_eq_δ' h], 
+    intros y hy,
+    cases hy,
+    { cases hy with w hw, cases hw with hw hle,
+      have hyU : y ∈ i '' U := 
+      begin
+        apply mem_is_cl_of_le _ hle,
+        apply_instance,
+        rw sΔ_eq_sΔ' h at hw,
+        exact hw.left.left
+      end,
+      rw mem_image at hyU,
+      cases hyU with x' hx',
+      use x',
+      apply and.intro _ hx'.right,
+      rw [←δ_eq_δ' h, ←i.iso_mem, δ_eq_δ' h],
+      left,
+      use w, rw hx'.right,
+      apply and.intro hw hle },
+    { rw mem_Union at hy, cases hy with k hk, cases hk with w hw, cases hw with hw hle,
+      have hyU : y ∈ i '' U := 
+      begin
+        apply mem_is_cl_of_le _ hle,
+        apply_instance,
+        apply Max_subset _ hw.left,
+      end,
+      rw mem_image at hyU,
+      cases hyU with x' hx',
+      use x',
+      apply and.intro _ hx'.right,
+      right, rw mem_Union, use k,
+      rw ←ι_map_Max_eq at hw, cases hw.left with z hz,
+      use z,
+      rw [←hx'.right, ←hz.right] at hle,
+      apply and.intro _ (ι_map_reflects hle),
+      apply and.intro hz.left, simp only,
+      rw ←ι_map_preserves_dim i, rw hz.right,
+      exact hw.right } },
+  { unfold δ, erw dif_neg h, apply empty_subset }
+end
+
+lemma ι_map_δ_eq  (U : set P) [is_closed U] (α : bool) (n : ℤ) : i '' δ α n U = δ α n (i '' U) :=
+subset_antisymm (ι_map_δ_sub i U α n) (ι_map_δ_sub' i U α n)
+
+-- Corollary 1.3.5 -- bij version (on the range)
+lemma ι_map_restrict_bij (U : set P) [is_closed U] (α : bool) (n : ℤ) : 
+  set.bij_on i (δ α n U) (δ α n (i '' U)) :=
+begin
+  rw ←ι_map_δ_eq,
+  apply set.inj_on.bij_on_image (inj_on_of_injective i.inj _)
+end
+
 
 end maps
