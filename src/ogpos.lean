@@ -1955,7 +1955,7 @@ lemma ι_map_δ_sub (U : set P) [is_closed U] (α : bool) (n : ℤ) : i '' δ α
 begin
   intros y hy,
   cases hy with x hx, 
-  rw i.iso_mem at hx,
+  rw ←i.iso_mem at hx,
   rw ←hx.right,
   exact hx.left
 end
