@@ -344,7 +344,7 @@ def maximal_path_concat.path {x y : P} (p : path y x) (q : maximal_path x) :
 -- In pratice, it should not be a problem, as when we prove that all paths have the same length,
 -- We will most likely exhibit one 
 structure is_graded (x : P) := 
-(dim : ℕ)
+(dim : ℤ)
 (max_path : maximal_path x)
 (same_length : ∀ p : maximal_path x, dim = path.length p.path)
 
@@ -361,7 +361,7 @@ variables {P} [graded P]
 
 def same_length (x : P) (p q : maximal_path x) : p.path.length = q.path.length :=
 begin
-  rw [←is_graded.same_length, ←is_graded.same_length],
+  rw [←@nat.cast_inj ℤ, ←is_graded.same_length, ←is_graded.same_length],
   exact graded.all_graded x
 end
 
@@ -939,22 +939,74 @@ begin
   nth_rewrite 0 ←bnot_bnot α,
   rw bool.not_eq_bnot,
 end
+
 -- Remark 1.2.4. TODO
 
-
 -- -- We can view any subset as a FinPartialOrder
--- instance subset_to_FinPartial_order : has_coe (set ↥P) FinPartialOrder.{u} :=
--- { coe := λ U, 
---   { to_PartialOrder := PartialOrder.of U, 
---     is_fintype := begin simp, apply fintype.of_finite U, end
---   } }
+noncomputable
+instance subset_to_FinPartial_order (P : FinPartialOrder) : has_coe (set P) FinPartialOrder :=
+{ coe := λ U, 
+  { to_PartialOrder := PartialOrder.of U, 
+    is_fintype := by { rw [PartialOrder.coe_of], apply fintype.of_finite U } } }
 
+noncomputable
+def set.to_pos {P : FinPartialOrder} (U : set P) : FinPartialOrder := 
+(subset_to_FinPartial_order P).coe U
+
+lemma coe_le_iff {P : FinPartialOrder} (U : { U : set P // is_closed U }) (x y : U) : 
+  x.val ≤ y.val ↔ x ≤ y := subtype.coe_le_coe
+
+lemma coe_lt_iff {P : FinPartialOrder} (U : { U : set P // is_closed U }) (x y : U) : 
+  x.val < y.val ↔ x < y := subtype.coe_lt_coe
+
+lemma coe_cov_reflect {P : FinPartialOrder} (U : { U : set P // is_closed U }) (x y : U) 
+  (hcov : x.val ⋖ y.val) : x ⋖ y :=
+begin
+  unfold covby,
+  apply and.intro hcov.lt,
+  intros c hc,
+  apply hcov.right hc
+end
+
+instance is_closed_subtype {P : FinPartialOrder} (U : { U : set P // is_closed U }) : is_closed U.val := U.prop
+
+@[simp, norm_cast]
+lemma coe_cov_iff {P : FinPartialOrder} (U : { U : set P // is_closed U }) (x y : U) :
+  (x : P) ⋖ y ↔ x ⋖ y :=
+begin
+  apply iff.intro (coe_cov_reflect U x y),
+  intro hcov,
+  apply and.intro (hcov.lt),
+  intros c hx hy,
+  have hc : c ∈ U.val := mem_is_cl_of_lt y.prop hy,
+  let c' : U := ⟨c, hc⟩,
+  change c with c' at hx hy,
+  apply hcov.right hx hy 
+end
+
+instance coe_cov {P : FinPartialOrder} (U : { U : set P // is_closed U }) (x y : U) : 
+  has_coe (x ⋖ y) ((x : P) ⋖ y) := { coe := λ x, by { rw coe_cov_iff, exact x }  }
+
+instance coe_hasse {P : FinPartialOrder} (U : { U : set P // is_closed U }) (x y : U) : 
+  has_coe (@quiver.hom U.val.to_pos _ x y) ((x : P) ⟶ y) :=
+{ coe := λ e, e }
+
+-- noncomputable 
+-- instance subset_coe_ogpos (P : ogpos) : has_coe ({ U : set P // is_closed U }) ogpos :=
+-- { coe := λ U, { P := U.val.to_pos, ε := λ x y e, P.ε ((coe_hasse U x y).coe e) }}
+
+-- instance subset_to_ogpos (P : ogpos) : has_coe (set ↥P) ogpos :=
+-- { coe := λ U,  {P := U.to_pos, ε := λ x y e, begin end, }}
+
+
+-- noncomputable
+-- def set.embedding {P : FinPartialOrder} (U : set P) : U.to_pos ↪o P := 
 -- def ι (U : set P) : U → (P : FinPartialOrder.{u}) := λ x, x
 
 -- instance embedding (U : set P) : has_coe U (P : FinPartialOrder.{u}) := {coe := ι P U}
 
--- def orientation_restriction (P : FinPartialOrder.{u}) (ε : orientation.{u} P) (U : set P) : 
---   orientation.{u} U := λ x y f, @ε (ι P U x) _ f
+
+-- def orientation_restriction (P : ogpos) (U : set P) : orientation U.to_pos := λ x y f, @ogpos.ε P (coe x) y f
 
 -- instance ogpos_closed (Q : ogpos.{u}) (U : set Q) [is_closed U] : ogpos.{u} :=
 -- { P := U,
@@ -1565,6 +1617,7 @@ namespace maps
 open faces 
 
 -- 1.3.1
+@[ext] -- ext creates the lemmas map.ext and map.ext_iff, that's really cool!
 structure map (P Q : ogpos) :=
 (app : P → Q)
 (comm : ∀ (x : P) (n : ℤ) (α : bool),  app '' (sδ α n x) = sδ α n (app x))
@@ -1583,6 +1636,30 @@ begin
   erw ←f.comm', 
   rw @δ_eq_of_Dim_le_n P tt m (cl {x}) _ (le_max_right _ _), 
   refl, 
+end
+
+def id (P : ogpos) : map P P :=
+{ app := λ x, x, 
+  comm := λ x n α, by erw image_id }
+
+@[simp]
+lemma map_id {P : ogpos} (x : P) : id P x = x := rfl
+  
+def map.comp {P Q R : ogpos} (g : map Q R ) (f : map P Q) : map P R := 
+{ app := g ∘ f, 
+  comm := λ x n α, by { erw [image_comp, ←g.comm, f.comm], refl } }
+
+lemma map_comp_app {P Q R : ogpos} (g : map Q R ) (f : map P Q) (x : P) : 
+  (g.comp f).app x = g (f x) := rfl
+
+lemma map_comp_assoc {P Q R S : ogpos} (h : map P Q) (g : map Q R) (f : map R S) :
+  f ∘ (g ∘ h) = (f ∘ g) ∘ h := by simp
+
+lemma map_comp_assoc' {P Q R S : ogpos} (h : map P Q) (g : map Q R) (f : map R S) :
+  map.comp f (map.comp g h) = (map.comp f g).comp h :=
+begin
+  ext,
+  erw map_comp_app,
 end
 
 -- Lemma 1.3.2 -- point 1
@@ -1921,7 +1998,7 @@ begin
     exact hx.right}
 end
 
--- Corollary 1.3.5 -- mem version (this only proves )
+-- Corollary 1.3.5 -- mem version (weaker actually)
 lemma ι_map.iso_mem (U : set P) [is_closed U] (α : bool) (n : ℤ) (x : P) : 
   i x ∈ δ α n (i '' U) ↔ x ∈ δ α n U :=
 begin
@@ -2015,5 +2092,18 @@ begin
   apply set.inj_on.bij_on_image (inj_on_of_injective i.inj _)
 end
 
-
 end maps
+
+open maps
+
+instance ogPos : category_theory.large_category ogpos := 
+{ hom := λ P Q, map P Q,
+  id := λ P, id P,
+  comp := λ _ _ _ f g, g.comp f,
+  id_comp' := λ _ _ _, by { ext, rw [map_comp_app, map_id], refl },
+  comp_id' := λ _ _ _, by { ext, rw [map_comp_app, map_id], refl },
+  assoc' := λ _ _ _ _ _ _ _, 
+    begin 
+      unfold category_theory.category_struct.comp, 
+      rw map_comp_assoc'
+    end }
